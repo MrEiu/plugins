@@ -147,52 +147,49 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
 
     con.print(Panel("\n".join(menu_lines), title="[bold #00f0ff]🤖 Kapsel AI Setup Wizard (kps ai init)[/]", border_style="#0891b2"))
 
-    # 1. Choice of provider
+    # Interactive prompt sequence
     try:
+        # 1. Choice of provider
         raw_choice = input(f"Enter choice [1-{len(PROVIDERS)}] (default: 1): ").strip()
         choice_idx = int(raw_choice) - 1 if raw_choice else 0
         if not (0 <= choice_idx < len(PROVIDERS)):
             con.print(f"[bold #f43f5e]Invalid selection. Defaulting to {PROVIDERS[0]['name']}.[/]")
             choice_idx = 0
-    except (ValueError, KeyboardInterrupt):
-        con.print("\n[dim]Setup aborted.[/]")
-        return 1
 
-    selected = PROVIDERS[choice_idx]
-    con.print(f"\n[bold #10b981]✔ Selected:[/] [white]{selected['name']}[/]\n")
+        selected = PROVIDERS[choice_idx]
+        con.print(f"\n[bold #10b981]✔ Selected:[/] [white]{selected['name']}[/]\n")
 
-    # 2. Base URL
-    api_base = selected["api_base"]
-    if selected["id"] == "custom":
-        raw_base = input("Enter API Base URL (e.g. https://api.my-llm.com/v1): ").strip()
-        api_base = raw_base or "http://localhost:8000/v1"
-    else:
-        prompt_base = input(f"API Base URL [{api_base}]: ").strip()
-        if prompt_base:
-            api_base = prompt_base
+        # 2. Base URL
+        api_base = selected["api_base"]
+        if selected["id"] == "custom":
+            raw_base = input("Enter API Base URL (e.g. https://api.my-llm.com/v1): ").strip()
+            api_base = raw_base or "http://localhost:8000/v1"
+        else:
+            prompt_base = input(f"API Base URL [{api_base}]: ").strip()
+            if prompt_base:
+                api_base = prompt_base
 
-    # 3. API Key
-    api_key = ""
-    if selected["requires_key"]:
-        try:
-            # Masked password input
+        # 3. API Key
+        api_key = ""
+        if selected["requires_key"]:
             api_key = getpass(selected["key_prompt"]).strip()
             if not api_key:
                 con.print("[yellow]Warning: Empty API key provided. Some requests may be rejected by the provider.[/]")
-        except (KeyboardInterrupt, EOFError):
-            con.print("\n[dim]Setup aborted.[/]")
-            return 1
-    else:
-        con.print("[dim]No API key required for local Ollama.[/]")
+        else:
+            con.print("[dim]No API key required for local Ollama.[/]")
 
-    # 4. Model Selection
-    default_model = selected["default_model"]
-    if selected["id"] == "custom":
-        model_name = input("Enter Model Name (e.g. gpt-3.5-turbo, qwen-max): ").strip() or "gpt-3.5-turbo"
-    else:
-        con.print(f"[dim]Suggested models:[/] {', '.join(selected['models'])}")
-        model_input = input(f"Default Model [{default_model}]: ").strip()
-        model_name = model_input if model_input else default_model
+        # 4. Model Selection
+        default_model = selected["default_model"]
+        if selected["id"] == "custom":
+            model_name = input("Enter Model Name (e.g. gpt-4o, qwen-max): ").strip() or "gpt-4o"
+        else:
+            con.print(f"[dim]Suggested models:[/] {', '.join(selected['models'])}")
+            model_input = input(f"Default Model [{default_model}]: ").strip()
+            model_name = model_input if model_input else default_model
+
+    except (ValueError, KeyboardInterrupt, EOFError):
+        con.print("\n[dim]Setup aborted.[/]")
+        return 1
 
     client_name = selected["client_name"]
 
