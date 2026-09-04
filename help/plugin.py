@@ -119,12 +119,14 @@ class HelpPlugin(KapselPlugin):
         """
         con = console or Console(legacy_windows=False)
 
-        # If bare 'kps help' or help flag without arguments, display styled guidance
-        if not args or args in (["-h"], ["--help"], ["help"]):
+        # If bare 'kapsel help' or 'kps help' without arguments, display unified Kapsel manual
+        if not args:
+            from kapsel.completion.kps.builtins.help import handle_help as handle_system_help
+            return handle_system_help([], con)
+
+        if args in (["-h"], ["--help"]):
             con.print("\n[bold #00f0ff]📖 Kapsel Help Plugin (Fast Command Cheat Sheets)[/]")
             con.print("[dim]Powered by 'tealdeer' (https://github.com/tealdeer-rs/tealdeer)[/]\n")
-            con.print("[bold #f59e0b]Notice:[/] [white]Looking for Kapsel system commands? Use:[/] [bold #00f0ff]kapsel help[/]")
-            con.print("        [dim]'kps help <cmd>' provides fast, practical cheat sheets for external CLI tools.[/]\n")
             con.print("[bold white]Usage:[/]")
             con.print("  [bold #a855f7]kps help <command...>[/]       Lookup cheat sheet for a command (e.g. 'kps help tar', 'kps help git commit')")
             con.print("  [bold #a855f7]kps help --update / -u[/]      Update local tldr page cache from GitHub")
