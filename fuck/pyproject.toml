@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-fuck"
+version = "0.1.0"
+description = "Command auto-correction plugin for Kapsel shell powered by thefuck."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+dependencies = ["thefuck"]
+keywords = ["kapsel", "plugin", "correction", "thefuck", "cli", "terminal"]
+
+[project.urls]
+Homepage = "https://github.com/MrEiu/plugins/tree/master/fuck"
+Repository = "https://github.com/MrEiu/plugins.git"
