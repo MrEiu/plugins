@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-alias"
+version = "0.1.0"
+description = "Cross-platform command alias translation plugin for Kapsel shell."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+dependencies = []
+keywords = ["kapsel", "plugin", "alias", "mapping", "cross-platform", "shell"]
+
+[project.urls]
+Homepage = "https://github.com/MrEiu/plugins/tree/master/alias"
+Repository = "https://github.com/MrEiu/plugins.git"
