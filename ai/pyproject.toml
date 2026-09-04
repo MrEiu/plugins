@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-ai"
+version = "0.1.0"
+description = "Terminal AI assistant plugin for Kapsel shell powered by aichat with guided setup wizard."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+dependencies = ["pyyaml"]
+keywords = ["kapsel", "plugin", "ai", "llm", "aichat", "deepseek", "openai", "cli"]
+
+[project.urls]
+Homepage = "https://github.com/MrEiu/plugins/tree/master/ai"
+Repository = "https://github.com/MrEiu/plugins.git"
