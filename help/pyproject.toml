@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-help"
+version = "0.1.0"
+description = "Fast command cheat sheet lookup plugin for Kapsel shell powered by tealdeer (tldr)."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+dependencies = ["tealdeer"]
+keywords = ["kapsel", "plugin", "help", "cheatsheet", "tldr", "tealdeer", "cli"]
+
+[project.urls]
+Homepage = "https://github.com/MrEiu/plugins/tree/master/help"
+Repository = "https://github.com/MrEiu/plugins.git"
