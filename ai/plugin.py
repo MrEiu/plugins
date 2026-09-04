@@ -151,7 +151,7 @@ class AiPlugin(KapselPlugin):
             con.print("\n[bold #00f0ff]🤖 Kapsel AI Assistant (Powered by aichat)[/]")
             con.print("[dim]Command-line intelligent assistance with guided configuration[/]\n")
             con.print("[bold white]Usage:[/]")
-            con.print("  [bold #a855f7]kps ai init[/]                  Run interactive guided setup wizard (DeepSeek, Ollama, OpenAI...)")
+            con.print("  [bold #a855f7]kps ai init[/]                  Run interactive guided setup wizard (OpenAI, Gemini, Claude, DeepSeek...)")
             con.print("  [bold #a855f7]kps ai <prompt...>[/]           Ask a question directly (e.g. 'kps ai how to extract tar.gz')")
             con.print("  [bold #a855f7]kps ai -e <prompt...>[/]        Generate shell command from natural language and run it")
             con.print("  [bold #a855f7]kps ai -c <prompt...>[/]        Output pure code snippet (suitable for file redirection)")

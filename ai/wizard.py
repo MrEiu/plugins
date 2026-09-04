@@ -24,6 +24,39 @@ ensure_utf8_io()
 # Predefined popular providers and default configurations
 PROVIDERS = [
     {
+        "id": "openai",
+        "name": "OpenAI (Official API)",
+        "type": "openai",
+        "client_name": "openai",
+        "api_base": "https://api.openai.com/v1",
+        "default_model": "gpt-4o",
+        "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1"],
+        "requires_key": True,
+        "key_prompt": "Enter OpenAI API Key (sk-...): ",
+    },
+    {
+        "id": "gemini",
+        "name": "Google Gemini (Official OpenAI-Compatible Endpoint)",
+        "type": "openai-compatible",
+        "client_name": "gemini",
+        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "default_model": "gemini-2.0-flash",
+        "models": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
+        "requires_key": True,
+        "key_prompt": "Enter Google AI Studio API Key (AIzaSy...): ",
+    },
+    {
+        "id": "claude",
+        "name": "Anthropic Claude (Official API)",
+        "type": "claude",
+        "client_name": "claude",
+        "api_base": "https://api.anthropic.com/v1",
+        "default_model": "claude-3-7-sonnet-20250219",
+        "models": ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+        "requires_key": True,
+        "key_prompt": "Enter Anthropic API Key (sk-ant-...): ",
+    },
+    {
         "id": "deepseek",
         "name": "DeepSeek (Official API)",
         "type": "openai-compatible",
@@ -41,7 +74,7 @@ PROVIDERS = [
         "client_name": "ollama",
         "api_base": "http://localhost:11434/v1",
         "default_model": "deepseek-r1:latest",
-        "models": ["deepseek-r1:latest", "llama3:latest", "qwen2.5:latest"],
+        "models": ["deepseek-r1:latest", "llama3.3:latest", "qwen2.5-coder:latest", "qwen2.5:latest"],
         "requires_key": False,
         "key_prompt": "",
     },
@@ -57,45 +90,12 @@ PROVIDERS = [
         "key_prompt": "Enter SiliconFlow API Key (sk-...): ",
     },
     {
-        "id": "openai",
-        "name": "OpenAI (Official API)",
-        "type": "openai",
-        "client_name": "openai",
-        "api_base": "https://api.openai.com/v1",
-        "default_model": "gpt-4o-mini",
-        "models": ["gpt-4o-mini", "gpt-4o", "o1-mini"],
-        "requires_key": True,
-        "key_prompt": "Enter OpenAI API Key (sk-...): ",
-    },
-    {
-        "id": "gemini",
-        "name": "Google Gemini (Official OpenAI-Compatible Endpoint)",
-        "type": "openai-compatible",
-        "client_name": "gemini",
-        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.0-flash",
-        "models": ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
-        "requires_key": True,
-        "key_prompt": "Enter Google AI Studio API Key (AIzaSy...): ",
-    },
-    {
-        "id": "claude",
-        "name": "Anthropic Claude (Official API)",
-        "type": "claude",
-        "client_name": "claude",
-        "api_base": "https://api.anthropic.com/v1",
-        "default_model": "claude-3-5-sonnet-20241022",
-        "models": ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
-        "requires_key": True,
-        "key_prompt": "Enter Anthropic API Key (sk-ant-...): ",
-    },
-    {
         "id": "custom",
         "name": "Custom OpenAI-Compatible (OneAPI, NewAPI, vLLM, etc.)",
         "type": "openai-compatible",
         "client_name": "custom",
         "api_base": "",
-        "default_model": "",
+        "default_model": "gpt-4o",
         "models": [],
         "requires_key": True,
         "key_prompt": "Enter Custom API Key: ",
@@ -149,10 +149,10 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
 
     # 1. Choice of provider
     try:
-        raw_choice = input("Enter choice [1-7] (default: 1): ").strip()
+        raw_choice = input(f"Enter choice [1-{len(PROVIDERS)}] (default: 1): ").strip()
         choice_idx = int(raw_choice) - 1 if raw_choice else 0
         if not (0 <= choice_idx < len(PROVIDERS)):
-            con.print("[bold #f43f5e]Invalid selection. Defaulting to DeepSeek.[/]")
+            con.print(f"[bold #f43f5e]Invalid selection. Defaulting to {PROVIDERS[0]['name']}.[/]")
             choice_idx = 0
     except (ValueError, KeyboardInterrupt):
         con.print("\n[dim]Setup aborted.[/]")

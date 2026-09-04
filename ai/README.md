@@ -2,7 +2,7 @@
 
 Terminal AI assistant plugin for the **Kapsel** shell, powered by [aichat](https://github.com/sigoden/aichat).
 
-The plugin provides instant single-turn natural language queries, shell command generation and execution (`-e`), code generation (`-c`), and a user-friendly interactive setup wizard (`kps ai init`) that configures modern LLM providers (DeepSeek, Ollama, SiliconFlow, OpenAI, Gemini, Claude, and custom endpoints) effortlessly.
+The plugin provides instant single-turn natural language queries, shell command generation and execution (`-e`), code generation (`-c`), and a user-friendly interactive setup wizard (`kps ai init`) that configures modern LLM providers (OpenAI, Gemini, Claude, DeepSeek, Ollama, SiliconFlow, and custom endpoints) effortlessly.
 
 > **Design Note**:
 > Bare `kps ai` displays an informative help and syntax guide with prompt examples instead of dropping you into an interactive REPL session, keeping your terminal responsive and workflow focused.
@@ -31,12 +31,12 @@ kps ai init
 
 The wizard guides you through:
 1. **Model Provider Selection**:
-   - `1` - DeepSeek (`deepseek-chat` / `deepseek-coder` / `deepseek-reasoner`)
-   - `2` - Ollama (Local LLM, no API key required, e.g. `llama3`, `deepseek-r1`)
-   - `3` - SiliconFlow (Fast Chinese domestic API gateway)
-   - `4` - OpenAI (`gpt-4o`, `gpt-4o-mini`, `o1`)
-   - `5` - Google Gemini (`gemini-1.5-pro`, `gemini-1.5-flash`)
-   - `6` - Anthropic Claude (`claude-3-5-sonnet-20241022`)
+   - `1` - OpenAI (`gpt-4o`, `gpt-4o-mini`, `o3-mini`, `o1`)
+   - `2` - Google Gemini (`gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro`, `gemini-1.5-flash`)
+   - `3` - Anthropic Claude (`claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`)
+   - `4` - DeepSeek (`deepseek-chat` / `deepseek-reasoner`)
+   - `5` - Ollama (Local LLM, no API key required, e.g. `deepseek-r1`, `llama3.3`, `qwen2.5-coder`)
+   - `6` - SiliconFlow (Fast Chinese domestic API gateway, `DeepSeek-V3`, `DeepSeek-R1`, `Qwen2.5`)
    - `7` - Custom OpenAI-compatible API (OneAPI, NewAPI, vLLM, FastChat)
 2. **API Key & Endpoint Configuration**: Safe input prompts for your credentials and custom URLs.
 3. **Model Selection & Connection Test**: Automatically saves configuration isolated under Kapsel's data directory (`$KAPSEL_DATA_DIR/ai/config.yaml`) and verifies network connectivity.
