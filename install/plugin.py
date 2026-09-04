@@ -13,23 +13,25 @@ from rich.console import Console
 
 from kapsel.core.plugin.base import KapselPlugin, PluginManifest
 from kapsel.core.plugin.context import PluginContext
+from kapsel.storage.config import get_kapsel_dir
 
 
 def _resolve_mpm_executable() -> Optional[List[str]]:
     """
     Locates the meta-package-manager (mpm) CLI executable.
-    Checks PATH first, then official on-the-fly runner (uvx), then falls back to python module.
+    Checks PATH first, then Kapsel local bin directory, then python module.
     """
+    # 1. System PATH
     mpm_path = shutil.which("mpm")
     if mpm_path:
         return [mpm_path]
 
-    # Official on-demand execution via uvx (mpm.run recommendation)
-    uvx_path = shutil.which("uvx")
-    if uvx_path:
-        return [uvx_path, "meta-package-manager"]
+    # 2. Local Kapsel bin directory (~/.kapsel/bin/mpm)
+    local_bin = get_kapsel_dir() / "bin" / ("mpm.exe" if sys.platform == "win32" else "mpm")
+    if local_bin.exists():
+        return [str(local_bin)]
 
-    # Check if meta_package_manager is installed in Python environment
+    # 3. Python environment module (pip)
     try:
         res = subprocess.run(
             [sys.executable, "-m", "meta_package_manager", "--version"],
@@ -49,16 +51,19 @@ def _resolve_mpm_executable() -> Optional[List[str]]:
 def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = None) -> int:
     """
     Executes an MPM subcommand with forwarded arguments.
-    Prompts the user with official installation methods if not found.
+    Prompts the user with installation methods if not found.
     """
     con = console or Console(legacy_windows=False)
     mpm_exec = _resolve_mpm_executable()
 
     if not mpm_exec:
         con.print("[bold #f43f5e]Error:[/] [white]meta-package-manager (mpm) is not installed.[/]")
-        con.print("[dim]Install it via official distribution channels (mpm.run):[/]")
-        con.print("    [bold #00f0ff]uv tool install meta-package-manager[/]  (Recommended)")
-        con.print("    [bold #a855f7]scoop install main/meta-package-manager[/]  (Windows Scoop)\n")
+        con.print("[dim]Install it via one of the following methods:[/]")
+        if sys.platform == "win32":
+            con.print("    [bold #00f0ff]scoop install main/meta-package-manager[/]  (Scoop)")
+        else:
+            con.print("    [bold #00f0ff]brew install meta-package-manager[/]  (Homebrew)")
+        con.print("    [bold #a855f7]pip install meta-package-manager[/]  (Python pip)\n")
         return 1
 
     cmd = mpm_exec + [subcmd] + args
