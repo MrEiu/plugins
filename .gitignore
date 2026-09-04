@@ -1,0 +1,9 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*.class
+
+build/
+dist/
+*.egg-info/
+.pytest_cache/
