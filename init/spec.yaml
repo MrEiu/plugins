@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+name: init
+description: "Project development environment and tool runtime initializer (powered by mise)"
+flags:
+  -h, --help: "Show help information"
+commands:
+  - name: use
+    description: "Pin and install a tool runtime in project (e.g. use node@22)"
+  - name: ls
+    aliases: ["list"]
+    description: "List installed and active tool runtimes"
+  - name: current
+    description: "Display active runtime versions in current directory"
+  - name: doctor
+    description: "Diagnose mise environment and PATH health"
+  - name: upgrade
+    description: "Upgrade outdated tool runtimes in current project"
+  - name: run
+    description: "Execute project task defined in mise.toml"

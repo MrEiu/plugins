@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+name: shore
+description: "Fast intelligent mirror source switcher (powered by chsrc)"
+flags:
+  -h, --help: "Show help information"
+commands:
+  - name: set
+    description: "Auto-benchmark and switch to the fastest mirror source"
+  - name: get
+    description: "Display current active mirror source configuration"
+  - name: reset
+    description: "Reset back to official default upstream source"
+  - name: measure
+    description: "Speed-test all available mirror sources"
+  - name: list
+    aliases: ["ls"]
+    description: "List supported languages, systems, software, or mirrors"
