@@ -1,0 +1,224 @@
+# ==============================================================================
+#  💊 Kapsel Install Plugin - Platform Priority & Binary Definitions
+#  All package manager metadata and platform default templates are defined here.
+#  Code reads from this file dynamically. You can add or modify managers freely.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Recognized package managers and their candidate executable binaries
+# ------------------------------------------------------------------------------
+managers:
+  # Windows
+  winget:
+    - winget
+    - winget.exe
+  scoop:
+    - scoop
+    - scoop.cmd
+    - scoop.ps1
+  choco:
+    - choco
+    - choco.exe
+  vcpkg:
+    - vcpkg
+    - vcpkg.exe
+  pwsh-gallery:
+    - pwsh
+    - pwsh.exe
+    - powershell.exe
+
+  # macOS
+  brew:
+    - brew
+  mas:
+    - mas
+
+  # Linux native & distro managers
+  pacman:
+    - pacman
+  yay:
+    - yay
+  paru:
+    - paru
+  apt:
+    - apt
+    - apt-get
+  dnf:
+    - dnf
+    - dnf5
+  zypper:
+    - zypper
+  apk:
+    - apk
+
+  # Sandboxed / Containerized
+  flatpak:
+    - flatpak
+  snap:
+    - snap
+  nix:
+    - nix-env
+    - nix
+
+  # Language / Universal managers
+  uv:
+    - uv
+    - uv.exe
+  pipx:
+    - pipx
+    - pipx.exe
+  cargo:
+    - cargo
+    - cargo.exe
+  npm:
+    - npm
+    - npm.cmd
+  pnpm:
+    - pnpm
+    - pnpm.cmd
+  yarn:
+    - yarn
+    - yarn.cmd
+  gem:
+    - gem
+    - gem.cmd
+  pip:
+    - pip
+    - pip3
+    - pip.exe
+  composer:
+    - composer
+    - composer.phar
+  go:
+    - go
+    - go.exe
+  dotnet:
+    - dotnet
+    - dotnet.exe
+  conda:
+    - conda
+    - conda.exe
+
+# ------------------------------------------------------------------------------
+# 2. Curated platform priority order templates
+# ------------------------------------------------------------------------------
+platforms:
+  windows:
+    - winget
+    - scoop
+    - choco
+    - vcpkg
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - pip
+
+  macos:
+    - brew
+    - mas
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - gem
+    - pip
+
+  linux_arch:
+    - pacman
+    - yay
+    - paru
+    - flatpak
+    - snap
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - pip
+
+  linux_debian:
+    - apt
+    - snap
+    - flatpak
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - pip
+
+  linux_fedora:
+    - dnf
+    - flatpak
+    - snap
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - pip
+
+  linux_suse:
+    - zypper
+    - flatpak
+    - snap
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pip
+
+  linux:
+    - pacman
+    - yay
+    - apt
+    - dnf
+    - zypper
+    - flatpak
+    - snap
+    - uv
+    - pipx
+    - cargo
+    - npm
+    - pnpm
+    - pip
+
+# ------------------------------------------------------------------------------
+# 3. Linux distribution identification patterns (/etc/os-release matches)
+# ------------------------------------------------------------------------------
+distro_patterns:
+  linux_arch:
+    - "id=arch"
+    - "id_like=arch"
+  linux_debian:
+    - "id=ubuntu"
+    - "id=debian"
+    - "id=linuxmint"
+    - "id=pop"
+  linux_fedora:
+    - "id=fedora"
+    - "id=rhel"
+    - "id=centos"
+    - "id=rocky"
+    - "id=alma"
+  linux_suse:
+    - "id=opensuse"
+    - "id=sles"
+
+# ------------------------------------------------------------------------------
+# 4. Default disabled managers (e.g. raw pip to avoid polluting system/user Python)
+# ------------------------------------------------------------------------------
+default_disabled:
+  - pip
+
+# ------------------------------------------------------------------------------
+# 5. CLI Flags that indicate explicit manager selection in mpm
+# ------------------------------------------------------------------------------
+mpm_explicit_flags:
+  - "--manager"
+  - "-m"
+  - "--exclude"
+  - "-x"
