@@ -124,6 +124,12 @@ class HelpPlugin(KapselPlugin):
             from kapsel.completion.kps.builtins.help import handle_help as handle_system_help
             return handle_system_help([], con)
 
+        if len(args) == 1:
+            from kapsel.completion.kps.builtins.help import HelpRenderer
+            renderer = HelpRenderer(con)
+            if renderer.render_topic(args[0]):
+                return 0
+
         if args in (["-h"], ["--help"]):
             con.print("\n[bold #00f0ff]📖 Kapsel Help Plugin (Fast Command Cheat Sheets)[/]")
             con.print("[dim]Powered by 'tealdeer' (https://github.com/tealdeer-rs/tealdeer)[/]\n")
