@@ -1,129 +1,486 @@
-# 🔌 Kapsel 官方插件仓库开发规范 (Plugins Repository Guide)
+# 🔌 Kapsel Plugins
 
-欢迎来到 Kapsel 官方插件家族仓库（Monorepo: `https://github.com/MrEiu/plugins`）。
-本文档面向所有插件开发者与维护者，详细规范插件结构、生命周期以及**外部依赖工具的安装策略**。
+**The official plugin ecosystem for Kapsel.**
+
+This repository contains the official Kapsel plugins and provides the
+development, packaging, installation, and contribution conventions used by
+the ecosystem.
+
+Kapsel plugins are intentionally decoupled from the core runtime. A plugin
+can provide commands, integrations, workflows, completion specifications,
+and external developer tools without expanding the Kapsel core itself.
+
+> **Core principle:** Kapsel provides the capsule; plugins provide the
+> capabilities.
 
 ---
 
-## 🌟 核心依赖安装准则 (Dependency Philosophy)
+## 🌐 Plugin Ecosystem
 
-> 📌 **铁律准则：**
-> 1. **首选 `kps install`**：虽然**绝大部分工具直接使用 `kps install <tool>` 都能解决**（依托底层 MPM 统一调动系统的各大主流包管理器，如 Scoop, Winget, Homebrew, Apt, Pacman 等）。
-> 2. **链式正规安装，严禁虚拟环境**：当工具依赖某一个特定的包管理工具（如 Python CLI 工具依赖 `pipx`，Rust CLI 工具依赖 `cargo`）时，**如果系统缺乏该包管理工具，就必须“先安装该包管理工具，然后再安装该目标工具”**。**严禁在插件中自搞虚拟环境（venv）或非标准临时目录等乱七八糟的做法**，确保用户系统环境的整洁、规范与全局一致性。
-> 3. **多平台差异化定制**：安装脚本**必须严格针对不同操作系统平台（Windows / macOS / Linux）设置针对性的安装方案与优雅降级策略**。
-
----
-
-## 📁 插件标准目录结构
-
-每个插件为一个独立的自闭环包目录：
+The repository is the home of the official plugin collection, but the
+architecture is designed for community contributions as well.
 
 ```text
-plugins/<plugin_name>/
-├── __init__.py           # 导出 Plugin = MyPlugin 类
-├── plugin.py             # 核心逻辑：继承 KapselPlugin，注册 kps 指令与生命周期钩子
-├── install.py            # 【独立依赖安装脚本】按平台差异化安装包管理器与目标工具
-├── pyproject.toml        # 插件包元数据与依赖定义
-├── README.md             # 插件完整英文使用文档与用例
-└── LICENSE               # 许可协议（MIT）
+                         Kapsel
+                           │
+                    ┌──────┴──────┐
+                    │             │
+                 Core        Plugin Ecosystem
+                                  │
+                         ┌────────┴────────┐
+                         │                 │
+                     Official          Community
+                     Plugins            Plugins
 ```
 
+### Official Plugins
+
+Official plugins are maintained as part of the Kapsel ecosystem and follow
+the conventions defined in this repository.
+
+### Community Plugins
+
+Third-party developers are welcome to create and submit plugins.
+
+Community plugins should follow the same plugin interface, packaging rules,
+installation conventions, and platform compatibility requirements described
+below.
+
+For contribution and submission details, see
+[Plugin Contribution](#-plugin-contribution).
+
 ---
 
-## 🛠 跨平台安装方案矩阵 (Cross-Platform Matrix)
+# 📁 Repository Structure
 
-编写 `install.py` 时，需遵循以下平台适配矩阵：
+Each plugin is maintained as an independent package under the `plugins/`
+directory:
 
-| 操作系统 | 优先方案 | 链式依赖方案（如缺少包管理器） | 终极兜底方案 |
-| :--- | :--- | :--- | :--- |
-| **Windows** | `kps install <tool>` / `scoop install` / `winget install` | 若依赖 pipx：先 `pip install pipx` -> 再 `pipx install <tool>` | 官方 Release 静态预编译二进制下载到 `~/.kapsel/bin/` |
-| **macOS** | `kps install <tool>` / `brew install <tool>` | 若依赖 pipx：先 `brew install pipx` -> 再 `pipx install <tool>` | 官方 Release (x86_64 / arm64) 静态二进制 |
-| **Linux** | `kps install <tool>` / 发行版包管 (`apt`, `pacman`, `dnf`) | 若依赖 pipx：先系统包管装 pipx -> 再 `pipx install <tool>` | 官方 musl / glibc 独立二进制 |
+```text
+plugins/
+├── <plugin_name>/
+│   ├── __init__.py
+│   ├── plugin.py
+│   ├── install.py
+│   ├── pyproject.toml
+│   ├── README.md
+│   └── LICENSE
+│
+└── ...
+```
+
+### Plugin Files
+
+| File | Purpose |
+| :--- | :--- |
+| `__init__.py` | Exposes the plugin entry point |
+| `plugin.py` | Core plugin logic, commands, and lifecycle hooks |
+| `install.py` | Optional installation logic for external dependencies |
+| `pyproject.toml` | Package metadata and Python dependencies |
+| `README.md` | Complete plugin documentation and usage examples |
+| `LICENSE` | Plugin license |
+
+A plugin should remain as self-contained as practical. Installation logic,
+runtime logic, metadata, and documentation should live with the plugin rather
+than being scattered across the repository.
 
 ---
 
-## 📝 标准 `install.py` 模板
+# 🧩 Plugin Interface
 
-在插件根目录下创建 `install.py`，对外导出统一接口 `def install(console: Console, bin_dir: Path) -> bool`：
+A plugin is loaded by Kapsel through its plugin entry point.
+
+The plugin implementation should inherit from the Kapsel plugin base and
+register its commands and lifecycle hooks through the supported API.
+
+A minimal structure looks like:
 
 ```python
-"""
-Installer for <PluginName> dependencies.
-Adheres to Kapsel chain installation philosophy:
-Package Manager First -> Target Tool Next -> Cross-platform tailored.
-"""
+from kapsel.plugin import KapselPlugin
 
+
+class MyPlugin(KapselPlugin):
+    name = "myplugin"
+
+    def register(self):
+        ...
+```
+
+The exact API may evolve with the Kapsel core. Plugin implementations should
+use the public plugin interfaces rather than depending on internal Kapsel
+modules.
+
+---
+
+# 📦 External Dependencies
+
+Plugins may depend on external command-line tools.
+
+The installation strategy is intentionally standardized so that plugins do
+not create isolated, ad-hoc environments on a user's machine.
+
+## Installation Principles
+
+### 1. Prefer `kps install`
+
+When the required tool is available through Kapsel's unified installation
+layer, prefer:
+
+```bash
+kps install <tool>
+```
+
+This allows Kapsel to select an appropriate system package manager for the
+host platform.
+
+### 2. Install Required Package Managers First
+
+Some CLI tools are distributed through a dedicated package manager.
+
+For example, a Python CLI may require `pipx`, while a Rust CLI may require
+`cargo`.
+
+If the required package manager is missing:
+
+```text
+Package Manager
+      ↓
+Target Tool
+```
+
+Install the package manager first, then install the target tool through it.
+
+Plugins should not create their own `venv`, temporary tool environments, or
+private copies of system package managers unless the dependency explicitly
+requires such behavior.
+
+### 3. Respect the Host Platform
+
+Installation logic must account for:
+
+- Windows
+- macOS
+- Linux
+
+A plugin should provide an appropriate installation path for each supported
+platform and degrade gracefully when an optional installation mechanism is
+unavailable.
+
+---
+
+# 🖥️ Cross-Platform Installation
+
+The preferred installation order is:
+
+| Platform | Preferred | Fallback | Final Fallback |
+| :--- | :--- | :--- | :--- |
+| **Windows** | `kps install` / Scoop / WinGet | Install required package manager first | Official prebuilt release |
+| **macOS** | `kps install` / Homebrew | Install required package manager first | Official x86_64 / arm64 release |
+| **Linux** | `kps install` / distro package manager / Homebrew | Install required package manager first | Official glibc / musl release |
+
+The exact order may be adjusted when a tool has platform-specific
+requirements.
+
+The important rule is that the plugin should use the most native and
+maintainable installation mechanism available before falling back to a
+standalone binary.
+
+---
+
+# 🛠️ `install.py`
+
+A plugin that requires external tools can provide an `install.py` module.
+
+The installer should expose:
+
+```python
+def install(console: Console, bin_dir: Path) -> bool:
+    ...
+```
+
+Its responsibilities are:
+
+1. Detect whether the dependency is already installed.
+2. Prefer `kps install` where appropriate.
+3. Use the host platform's native package manager when appropriate.
+4. Install a required package manager before installing its target tool.
+5. Fall back to an official standalone release when available.
+6. Return `True` only when the dependency is ready for use.
+
+A minimal example:
+
+```python
 from pathlib import Path
 import platform
 import shutil
 import subprocess
 import sys
+
 from rich.console import Console
 
 
 def install(console: Console, bin_dir: Path) -> bool:
-    """
-    Standard plugin installation entrypoint:
-    1. Check if tool already exists in PATH
-    2. Try kps install / native package managers (Brew, Scoop, Winget, Apt)
-    3. If relying on a package manager (e.g. pipx) that is missing:
-       Install that package manager first, then install the tool!
-    """
     tool_name = "<tool_name>"
+
     if shutil.which(tool_name):
         console.print(f"[dim]✔ {tool_name} is already installed.[/]")
         return True
 
     system = platform.system().lower()
-    console.print(f"[bold #00f0ff]📦 Installing {tool_name} for platform: {system}...[/]")
 
-    # 1. 尝试统一包管理器 kps install / 系统原生包管
+    # 1. Prefer Kapsel's unified installer.
     if shutil.which("kps"):
-        res = subprocess.run(["kps", "install", tool_name], stdout=subprocess.DEVNULL)
-        if res.returncode == 0 and shutil.which(tool_name):
+        result = subprocess.run(
+            ["kps", "install", tool_name],
+            stdout=subprocess.DEVNULL,
+        )
+        if result.returncode == 0 and shutil.which(tool_name):
             return True
 
-    # 2. macOS / Linux 优先 Homebrew
-    if system in ("darwin", "linux") and shutil.which("brew"):
-        res = subprocess.run(["brew", "install", tool_name], stdout=subprocess.DEVNULL)
-        if res.returncode == 0 and shutil.which(tool_name):
-            return True
+    # 2. Add platform-specific installation logic here.
+    #
+    # Windows: Scoop / WinGet
+    # macOS: Homebrew
+    # Linux: apt / dnf / pacman / Homebrew
+    #
+    # 3. If the tool requires a package manager such as pipx,
+    #    install that manager first and then install the target.
 
-    # 3. 链式安装：若工具依赖 pipx，缺乏时先安装 pipx，再通过 pipx 安装目标工具
-    if not shutil.which("pipx"):
-        console.print("[dim]  Required package manager 'pipx' missing. Installing pipx first...[/]")
-        if system == "windows":
-            subprocess.run([sys.executable, "-m", "pip", "install", "pipx", "--quiet"])
-        elif shutil.which("brew"):
-            subprocess.run(["brew", "install", "pipx"])
-        else:
-            subprocess.run([sys.executable, "-m", "pip", "install", "pipx", "--quiet"])
-
-    if shutil.which("pipx") or shutil.which("pipx.exe"):
-        console.print(f"[dim]  Installing {tool_name} using pipx...[/]")
-        subprocess.run(["pipx", "install", tool_name])
-        return bool(shutil.which(tool_name))
-
-    # 4. 终极兜底：预编译单文件 Release (可选)
-    # 若无法通过包管理器安装，可从官方发布页下载独立二进制放入 bin_dir
-
-    console.print(f"[bold #f43f5e]✘ Automatic installation failed for {tool_name}.[/]")
+    console.print(
+        f"[bold #f43f5e]✘ Automatic installation failed for {tool_name}.[/]"
+    )
     return False
 ```
 
+The example is intentionally minimal. Each plugin should implement only the
+installation paths actually required by its dependencies.
+
 ---
 
-## 🚀 插件开发与发布流程
+# 🧹 Installation Hygiene
 
-1. **新建插件脚手架**：
-   ```bash
-   python scripts/sync_plugins.py --new <plugin_name>
-   ```
-2. **本地测试与启用**：
-   ```bash
-   kapsel add <plugin_name>
-   ```
-3. **同步并推送到 GitHub 插件仓库**：
-   ```bash
-   python scripts/sync_plugins.py <plugin_name> --push
-   ```
+Plugins should avoid polluting the user's environment.
+
+Do not:
+
+- create arbitrary virtual environments for CLI dependencies;
+- download tools into undocumented temporary directories;
+- modify shell startup files directly;
+- silently overwrite an existing system executable;
+- assume a single package manager exists on every platform;
+- embed platform-specific paths without detection.
+
+Prefer:
+
+```text
+Kapsel / system package manager
+          ↓
+      target tool
+```
+
+over:
+
+```text
+Plugin
+  ├── private venv
+  ├── private package manager
+  └── private copy of the tool
+```
+
+When a standalone binary is required, use the official upstream release when
+possible and place Kapsel-managed binaries under the designated Kapsel
+runtime directory.
+
+---
+
+# 📝 Plugin Documentation
+
+Every plugin must include its own `README.md`.
+
+A plugin README should explain:
+
+```text
+What does this plugin do?
+How do I install it?
+How do I use it?
+What external dependencies does it require?
+Which platforms are supported?
+How do I configure it?
+How do I contribute?
+```
+
+A typical structure is:
+
+```markdown
+# Plugin Name
+
+Short description.
+
+## Installation
+
+...
+
+## Usage
+
+...
+
+## Configuration
+
+...
+
+## Dependencies
+
+...
+
+## Platform Support
+
+...
+
+## Development
+
+...
+```
+
+Plugin documentation should focus on the plugin itself. General Kapsel
+concepts should link back to the main Kapsel documentation where possible.
+
+---
+
+# 🚀 Development Workflow
+
+## 1. Create a Plugin
+
+Use the repository's plugin synchronization script:
+
+```bash
+python scripts/sync_plugins.py --new <plugin_name>
+```
+
+This creates the standard plugin structure.
+
+## 2. Implement the Plugin
+
+Develop the plugin under:
+
+```text
+plugins/<plugin_name>/
+```
+
+Implement:
+
+- plugin metadata;
+- command registration;
+- lifecycle hooks where required;
+- external dependency installation where required;
+- documentation;
+- tests where applicable.
+
+## 3. Test Locally
+
+Enable the plugin in a local Kapsel environment:
+
+```bash
+kapsel add <plugin_name>
+```
+
+Then test its commands through:
+
+```bash
+kps <plugin_name>
+```
+
+Also verify the plugin's dependency installation behavior on every platform
+you claim to support.
+
+## 4. Synchronize the Repository
+
+For official repository maintenance:
+
+```bash
+python scripts/sync_plugins.py <plugin_name>
+```
+
+## 5. Submit Changes
+
+Create a branch, commit your changes, and open a pull request.
+
+For community plugins, follow the contribution requirements described below.
+
+---
+
+# 🤝 Plugin Contribution
+
+Kapsel welcomes third-party plugin contributions.
+
+A community plugin should:
+
+- provide a clear and focused purpose;
+- use the supported Kapsel plugin interface;
+- avoid modifying global shell configuration;
+- follow the dependency installation policy;
+- support all platforms it claims to support;
+- include a useful README;
+- avoid bundling unnecessary copies of external tools;
+- use an appropriate open-source license;
+- avoid malicious, destructive, or undisclosed behavior.
+
+## Pull Request Checklist
+
+Before submitting a plugin:
+
+```text
+[ ] Plugin structure follows the standard layout
+[ ] Plugin entry point is valid
+[ ] Commands use the supported Kapsel API
+[ ] External dependencies are documented
+[ ] Installation works on supported platforms
+[ ] No unnecessary virtual environment is created
+[ ] No shell startup files are modified
+[ ] README.md is included
+[ ] LICENSE is included
+[ ] Basic functionality has been tested
+```
+
+Maintainers may request changes before a plugin is accepted into the official
+ecosystem.
+
+Community plugins remain maintained by their respective contributors unless
+they are later adopted by the Kapsel maintainers.
+
+---
+
+# 🔐 Security
+
+Plugins execute code on the user's machine and may invoke external programs.
+
+Plugin authors must clearly document:
+
+- external commands they execute;
+- files or directories they modify;
+- network access where applicable;
+- credentials or environment variables they require;
+- external services they communicate with.
+
+Do not hide installation behavior or execute unrelated commands as part of
+plugin setup.
+
+If you discover a security issue in a plugin or in the plugin infrastructure,
+please report it privately to the Kapsel maintainers rather than publishing
+exploitation details in a public issue.
+
+---
+
+# 📄 License
+
+Unless otherwise specified by an individual plugin, plugins in this
+repository are released under the **MIT License**.
+
+See each plugin's `LICENSE` file for its applicable license.
+
+---
+
+<div align="center">
+
+**Build the capsule. Extend the ecosystem.**
+
+</div>
