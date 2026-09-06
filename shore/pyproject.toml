@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-shore"
-version = "0.1.0"
+version = "0.1.1"
 description = "Fast intelligent mirror source switcher plugin for Kapsel powered by chsrc."
 authors = [{ name = "Kapsel Team" }]
 license = { text = "MIT" }

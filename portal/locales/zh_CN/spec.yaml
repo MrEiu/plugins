@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (简体中文)
+name: portal
+description: 智能目录跳转与工作区导航（由zoxide驱动）
+standalone: true
+flags:
+  -h, --help: 显示帮助信息
+commands:
+- name: ls
+  aliases:
+  - list
+  description: 列出排名目录及频率分数
+  flags:
+    -s, --score: 打印结果时显示分数
+- name: add
+  aliases:
+  - +
+  description: 将目录添加到数据库（默认为当前工作目录）
+- name: rm
+  aliases:
+  - remove
+  - '-'
+  description: 从数据库中移除目录
+- name: query
+  description: 在数据库中搜索目录
+- name: open
+  aliases:
+  - explore
+  description: 在原生文件资源管理器中打开目录
+- name: doctor
+  description: 诊断zoxide安装和环境
+- name: edit
+  description: 直接编辑zoxide数据库
+- name: init
+  description: 生成外部Shell钩子配置

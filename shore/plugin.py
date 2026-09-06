@@ -151,7 +151,7 @@ class ShorePlugin(KapselPlugin):
     manifest = PluginManifest(
         id="shore",
         name="Shore",
-        version="0.1.0",
+        version="0.1.1",
         description="Fast intelligent mirror source switcher powered by chsrc.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/shore",

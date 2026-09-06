@@ -1,0 +1,749 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (English)
+name: shore
+description: Fast intelligent mirror source switcher (powered by chsrc)
+standalone: true
+flags:
+  -h, --help: Show help information
+  -v, --version: Show version
+commands:
+- name: set
+  aliases:
+  - s
+  description: Auto-benchmark and switch to the fastest mirror source
+  commands:
+  - name: python
+    description: Python / PyPI package index
+    aliases: &id010
+    - py
+    commands:
+    - &id001
+      name: first
+      description: Fastest mirror benchmarked by upstream maintainers
+    - &id002
+      name: tuna
+      description: Tsinghua University Open Source Mirror (TUNA)
+    - &id003
+      name: aliyun
+      description: Alibaba Cloud Open Source Mirror
+    - &id004
+      name: ustc
+      description: University of Science and Technology of China (USTC)
+    - &id005
+      name: tencent
+      description: Tencent Cloud Public Mirror
+    - &id006
+      name: huawei
+      description: Huawei Cloud Open Source Mirror
+    - &id007
+      name: '163'
+      description: NetEase Open Source Mirror
+    - &id008
+      name: bfsu
+      description: Beijing Foreign Studies University Mirror
+    - &id009
+      name: sjtu
+      description: Shanghai Jiao Tong University Mirror
+  - name: pip
+    description: Python pip package installer
+    aliases: &id011
+    - pip3
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: uv
+    description: Fast Python package and project manager (Astral uv)
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: poetry
+    description: Python packaging and dependency management
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pdm
+    description: Modern Python package and dependency manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rye
+    description: Python package management tool
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: npm
+    description: Node.js package manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: yarn
+    description: Fast, reliable, and secure dependency management
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pnpm
+    description: Fast, disk space efficient package manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: bun
+    description: All-in-one JavaScript runtime and package manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: node
+    description: Node.js binary distributions
+    aliases: &id012
+    - nodejs
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nvm
+    description: Node Version Manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cargo
+    description: Rust package manager and crates.io registry
+    aliases: &id013
+    - rust
+    - crates
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rustup
+    description: Rust toolchain installer and updater
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: go
+    description: Go module proxy and sumdb
+    aliases: &id014
+    - golang
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: docker
+    description: Docker daemon registry mirror
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: brew
+    description: Homebrew package manager (bottles and git repos)
+    aliases: &id015
+    - homebrew
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: scoop
+    description: Scoop command-line installer for Windows
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: winget
+    description: Windows Package Manager repository
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: conda
+    description: Anaconda / Miniconda package repositories
+    aliases: &id016
+    - anaconda
+    - miniconda
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: maven
+    description: Apache Maven central repository
+    aliases: &id017
+    - mvn
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: gradle
+    description: Gradle build tool repository
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nuget
+    description: .NET NuGet package feed
+    aliases: &id018
+    - .net
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: flutter
+    description: Flutter SDK and pub packages
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: dart
+    description: Dart pub package repository
+    aliases: &id019
+    - pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ruby
+    description: RubyGems package repository
+    aliases: &id020
+    - gem
+    - rubygems
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: composer
+    description: PHP Composer repository (Packagist)
+    aliases: &id021
+    - php
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cpan
+    description: Perl CPAN package archive
+    aliases: &id022
+    - perl
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ubuntu
+    description: Ubuntu Linux APT package archives
+    aliases: &id023
+    - apt
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: debian
+    description: Debian Linux APT package archives
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: arch
+    description: Arch Linux pacman package mirrors
+    aliases: &id024
+    - pacman
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: fedora
+    description: Fedora Linux RPM repositories
+    aliases: &id025
+    - dnf
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: alpine
+    description: Alpine Linux apk package mirrors
+    aliases: &id026
+    - apk
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+- name: get
+  aliases:
+  - g
+  description: Display current active mirror source configuration
+  commands:
+  - name: python
+    description: Python / PyPI package index
+    aliases: *id010
+  - name: pip
+    description: Python pip package installer
+    aliases: *id011
+  - name: uv
+    description: Fast Python package and project manager (Astral uv)
+  - name: poetry
+    description: Python packaging and dependency management
+  - name: pdm
+    description: Modern Python package and dependency manager
+  - name: rye
+    description: Python package management tool
+  - name: npm
+    description: Node.js package manager
+  - name: yarn
+    description: Fast, reliable, and secure dependency management
+  - name: pnpm
+    description: Fast, disk space efficient package manager
+  - name: bun
+    description: All-in-one JavaScript runtime and package manager
+  - name: node
+    description: Node.js binary distributions
+    aliases: *id012
+  - name: nvm
+    description: Node Version Manager
+  - name: cargo
+    description: Rust package manager and crates.io registry
+    aliases: *id013
+  - name: rustup
+    description: Rust toolchain installer and updater
+  - name: go
+    description: Go module proxy and sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker daemon registry mirror
+  - name: brew
+    description: Homebrew package manager (bottles and git repos)
+    aliases: *id015
+  - name: scoop
+    description: Scoop command-line installer for Windows
+  - name: winget
+    description: Windows Package Manager repository
+  - name: conda
+    description: Anaconda / Miniconda package repositories
+    aliases: *id016
+  - name: maven
+    description: Apache Maven central repository
+    aliases: *id017
+  - name: gradle
+    description: Gradle build tool repository
+  - name: nuget
+    description: .NET NuGet package feed
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK and pub packages
+  - name: dart
+    description: Dart pub package repository
+    aliases: *id019
+  - name: ruby
+    description: RubyGems package repository
+    aliases: *id020
+  - name: composer
+    description: PHP Composer repository (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN package archive
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT package archives
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT package archives
+  - name: arch
+    description: Arch Linux pacman package mirrors
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM repositories
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk package mirrors
+    aliases: *id026
+- name: reset
+  aliases:
+  - r
+  description: Reset back to official default upstream source
+  commands:
+  - name: python
+    description: Python / PyPI package index
+    aliases: *id010
+  - name: pip
+    description: Python pip package installer
+    aliases: *id011
+  - name: uv
+    description: Fast Python package and project manager (Astral uv)
+  - name: poetry
+    description: Python packaging and dependency management
+  - name: pdm
+    description: Modern Python package and dependency manager
+  - name: rye
+    description: Python package management tool
+  - name: npm
+    description: Node.js package manager
+  - name: yarn
+    description: Fast, reliable, and secure dependency management
+  - name: pnpm
+    description: Fast, disk space efficient package manager
+  - name: bun
+    description: All-in-one JavaScript runtime and package manager
+  - name: node
+    description: Node.js binary distributions
+    aliases: *id012
+  - name: nvm
+    description: Node Version Manager
+  - name: cargo
+    description: Rust package manager and crates.io registry
+    aliases: *id013
+  - name: rustup
+    description: Rust toolchain installer and updater
+  - name: go
+    description: Go module proxy and sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker daemon registry mirror
+  - name: brew
+    description: Homebrew package manager (bottles and git repos)
+    aliases: *id015
+  - name: scoop
+    description: Scoop command-line installer for Windows
+  - name: winget
+    description: Windows Package Manager repository
+  - name: conda
+    description: Anaconda / Miniconda package repositories
+    aliases: *id016
+  - name: maven
+    description: Apache Maven central repository
+    aliases: *id017
+  - name: gradle
+    description: Gradle build tool repository
+  - name: nuget
+    description: .NET NuGet package feed
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK and pub packages
+  - name: dart
+    description: Dart pub package repository
+    aliases: *id019
+  - name: ruby
+    description: RubyGems package repository
+    aliases: *id020
+  - name: composer
+    description: PHP Composer repository (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN package archive
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT package archives
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT package archives
+  - name: arch
+    description: Arch Linux pacman package mirrors
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM repositories
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk package mirrors
+    aliases: *id026
+- name: measure
+  aliases:
+  - m
+  - speed
+  - cesu
+  description: Speed-test and benchmark all available mirror sources
+  commands:
+  - name: python
+    description: Python / PyPI package index
+    aliases: *id010
+  - name: pip
+    description: Python pip package installer
+    aliases: *id011
+  - name: uv
+    description: Fast Python package and project manager (Astral uv)
+  - name: poetry
+    description: Python packaging and dependency management
+  - name: pdm
+    description: Modern Python package and dependency manager
+  - name: rye
+    description: Python package management tool
+  - name: npm
+    description: Node.js package manager
+  - name: yarn
+    description: Fast, reliable, and secure dependency management
+  - name: pnpm
+    description: Fast, disk space efficient package manager
+  - name: bun
+    description: All-in-one JavaScript runtime and package manager
+  - name: node
+    description: Node.js binary distributions
+    aliases: *id012
+  - name: nvm
+    description: Node Version Manager
+  - name: cargo
+    description: Rust package manager and crates.io registry
+    aliases: *id013
+  - name: rustup
+    description: Rust toolchain installer and updater
+  - name: go
+    description: Go module proxy and sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker daemon registry mirror
+  - name: brew
+    description: Homebrew package manager (bottles and git repos)
+    aliases: *id015
+  - name: scoop
+    description: Scoop command-line installer for Windows
+  - name: winget
+    description: Windows Package Manager repository
+  - name: conda
+    description: Anaconda / Miniconda package repositories
+    aliases: *id016
+  - name: maven
+    description: Apache Maven central repository
+    aliases: *id017
+  - name: gradle
+    description: Gradle build tool repository
+  - name: nuget
+    description: .NET NuGet package feed
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK and pub packages
+  - name: dart
+    description: Dart pub package repository
+    aliases: *id019
+  - name: ruby
+    description: RubyGems package repository
+    aliases: *id020
+  - name: composer
+    description: PHP Composer repository (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN package archive
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT package archives
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT package archives
+  - name: arch
+    description: Arch Linux pacman package mirrors
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM repositories
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk package mirrors
+    aliases: *id026
+- name: list
+  aliases:
+  - ls
+  - l
+  description: List supported languages, systems, software, or mirrors
+  commands:
+  - name: mirror
+    description: List all known mirror providers (Tsinghua, Aliyun, USTC, etc.)
+  - name: dish
+    description: List all supported programming languages and package managers
+  - name: lang
+    description: List supported programming language dishes
+  - name: os
+    description: List supported operating system distribution dishes
+  - name: ware
+    description: List supported software and package manager dishes
+- name: doctor
+  description: Diagnose chsrc installation, system PATH, and network connectivity

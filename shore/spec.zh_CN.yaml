@@ -1,0 +1,749 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (简体中文)
+name: shore
+description: 快速智能镜像源切换器（由chsrc驱动）
+standalone: true
+flags:
+  -h, --help: 显示帮助信息
+  -v, --version: 显示版本
+commands:
+- name: set
+  aliases:
+  - s
+  description: 自动基准测试并切换到最快的镜像源
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: &id010
+    - py
+    commands:
+    - &id001
+      name: first
+      description: 由上游维护者基准测试的最快镜像
+    - &id002
+      name: tuna
+      description: 清华大学开源软件镜像站（TUNA）
+    - &id003
+      name: aliyun
+      description: 阿里云开源镜像站
+    - &id004
+      name: ustc
+      description: 中国科学技术大学开源软件镜像（USTC）
+    - &id005
+      name: tencent
+      description: 腾讯云公共镜像
+    - &id006
+      name: huawei
+      description: 华为云开源镜像站
+    - &id007
+      name: '163'
+      description: 网易开源镜像站
+    - &id008
+      name: bfsu
+      description: 北京外国语大学镜像站
+    - &id009
+      name: sjtu
+      description: 上海交通大学镜像站
+  - name: pip
+    description: Python pip 包安装器
+    aliases: &id011
+    - pip3
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: uv
+    description: 快速的 Python 包和项目管理器（Astral uv）
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: poetry
+    description: Python 打包和依赖管理
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pdm
+    description: 现代 Python 包和依赖管理器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rye
+    description: Python 包管理工具
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: npm
+    description: Node.js 包管理器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: yarn
+    description: 快速、可靠且安全的依赖管理
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pnpm
+    description: 快速、节省磁盘空间的包管理器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: bun
+    description: 一体化 JavaScript 运行时和包管理器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: node
+    description: Node.js 二进制发行版
+    aliases: &id012
+    - nodejs
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nvm
+    description: Node 版本管理器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cargo
+    description: Rust 包管理器和 crates.io 注册表
+    aliases: &id013
+    - rust
+    - crates
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rustup
+    description: Rust 工具链安装器和更新器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: go
+    description: Go 模块代理和 sumdb
+    aliases: &id014
+    - golang
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: docker
+    description: Docker 守护进程注册表镜像
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: brew
+    description: Homebrew 包管理器（bottles 和 git 仓库）
+    aliases: &id015
+    - homebrew
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: scoop
+    description: Windows 的 Scoop 命令行安装器
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: winget
+    description: Windows 包管理器仓库
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: conda
+    description: Anaconda / Miniconda 包仓库
+    aliases: &id016
+    - anaconda
+    - miniconda
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: maven
+    description: Apache Maven 中央仓库
+    aliases: &id017
+    - mvn
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: gradle
+    description: Gradle 构建工具仓库
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nuget
+    description: .NET NuGet 包源
+    aliases: &id018
+    - .net
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: flutter
+    description: Flutter SDK 和 pub 包
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: dart
+    description: Dart pub 包仓库
+    aliases: &id019
+    - pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ruby
+    description: RubyGems 包仓库
+    aliases: &id020
+    - gem
+    - rubygems
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: composer
+    description: PHP Composer 仓库（Packagist）
+    aliases: &id021
+    - php
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cpan
+    description: Perl CPAN 包存档
+    aliases: &id022
+    - perl
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ubuntu
+    description: Ubuntu Linux APT 包存档
+    aliases: &id023
+    - apt
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: debian
+    description: Debian Linux APT 包存档
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: arch
+    description: Arch Linux pacman 包镜像
+    aliases: &id024
+    - pacman
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: fedora
+    description: Fedora Linux RPM 仓库
+    aliases: &id025
+    - dnf
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: alpine
+    description: Alpine Linux apk 包镜像
+    aliases: &id026
+    - apk
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+- name: get
+  aliases:
+  - g
+  description: 显示当前活动的镜像源配置
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip 包安装器
+    aliases: *id011
+  - name: uv
+    description: 快速的 Python 包和项目管理器（Astral uv）
+  - name: poetry
+    description: Python 打包和依赖管理
+  - name: pdm
+    description: 现代 Python 包和依赖管理器
+  - name: rye
+    description: Python 包管理工具
+  - name: npm
+    description: Node.js 包管理器
+  - name: yarn
+    description: 快速、可靠且安全的依赖管理
+  - name: pnpm
+    description: 快速、节省磁盘空间的包管理器
+  - name: bun
+    description: 一体化 JavaScript 运行时和包管理器
+  - name: node
+    description: Node.js 二进制发行版
+    aliases: *id012
+  - name: nvm
+    description: Node 版本管理器
+  - name: cargo
+    description: Rust 包管理器和 crates.io 注册表
+    aliases: *id013
+  - name: rustup
+    description: Rust 工具链安装器和更新器
+  - name: go
+    description: Go 模块代理和 sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker 守护进程注册表镜像
+  - name: brew
+    description: Homebrew 包管理器（bottles 和 git 仓库）
+    aliases: *id015
+  - name: scoop
+    description: Windows 的 Scoop 命令行安装器
+  - name: winget
+    description: Windows 包管理器仓库
+  - name: conda
+    description: Anaconda / Miniconda 包仓库
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央仓库
+    aliases: *id017
+  - name: gradle
+    description: Gradle 构建工具仓库
+  - name: nuget
+    description: .NET NuGet 包源
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK 和 pub 包
+  - name: dart
+    description: Dart pub 包仓库
+    aliases: *id019
+  - name: ruby
+    description: RubyGems 包仓库
+    aliases: *id020
+  - name: composer
+    description: PHP Composer 仓库（Packagist）
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN 包存档
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT 包存档
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT 包存档
+  - name: arch
+    description: Arch Linux pacman 包镜像
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM 仓库
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk 包镜像
+    aliases: *id026
+- name: reset
+  aliases:
+  - r
+  description: 重置回官方默认上游源
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip 包安装器
+    aliases: *id011
+  - name: uv
+    description: 快速的 Python 包和项目管理器（Astral uv）
+  - name: poetry
+    description: Python 打包和依赖管理
+  - name: pdm
+    description: 现代 Python 包和依赖管理器
+  - name: rye
+    description: Python 包管理工具
+  - name: npm
+    description: Node.js 包管理器
+  - name: yarn
+    description: 快速、可靠且安全的依赖管理
+  - name: pnpm
+    description: 快速、节省磁盘空间的包管理器
+  - name: bun
+    description: 一体化 JavaScript 运行时和包管理器
+  - name: node
+    description: Node.js 二进制发行版
+    aliases: *id012
+  - name: nvm
+    description: Node 版本管理器
+  - name: cargo
+    description: Rust 包管理器和 crates.io 注册表
+    aliases: *id013
+  - name: rustup
+    description: Rust 工具链安装器和更新器
+  - name: go
+    description: Go 模块代理和 sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker 守护进程注册表镜像
+  - name: brew
+    description: Homebrew 包管理器（bottles 和 git 仓库）
+    aliases: *id015
+  - name: scoop
+    description: Windows 的 Scoop 命令行安装器
+  - name: winget
+    description: Windows 包管理器仓库
+  - name: conda
+    description: Anaconda / Miniconda 包仓库
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央仓库
+    aliases: *id017
+  - name: gradle
+    description: Gradle 构建工具仓库
+  - name: nuget
+    description: .NET NuGet 包源
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK 和 pub 包
+  - name: dart
+    description: Dart pub 包仓库
+    aliases: *id019
+  - name: ruby
+    description: RubyGems 包仓库
+    aliases: *id020
+  - name: composer
+    description: PHP Composer 仓库（Packagist）
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN 包存档
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT 包存档
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT 包存档
+  - name: arch
+    description: Arch Linux pacman 包镜像
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM 仓库
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk 包镜像
+    aliases: *id026
+- name: measure
+  aliases:
+  - m
+  - speed
+  - cesu
+  description: 对所有可用镜像源进行测速和基准测试
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip 包安装器
+    aliases: *id011
+  - name: uv
+    description: 快速的 Python 包和项目管理器（Astral uv）
+  - name: poetry
+    description: Python 打包和依赖管理
+  - name: pdm
+    description: 现代 Python 包和依赖管理器
+  - name: rye
+    description: Python 包管理工具
+  - name: npm
+    description: Node.js 包管理器
+  - name: yarn
+    description: 快速、可靠且安全的依赖管理
+  - name: pnpm
+    description: 快速、节省磁盘空间的包管理器
+  - name: bun
+    description: 一体化 JavaScript 运行时和包管理器
+  - name: node
+    description: Node.js 二进制发行版
+    aliases: *id012
+  - name: nvm
+    description: Node 版本管理器
+  - name: cargo
+    description: Rust 包管理器和 crates.io 注册表
+    aliases: *id013
+  - name: rustup
+    description: Rust 工具链安装器和更新器
+  - name: go
+    description: Go 模块代理和 sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker 守护进程注册表镜像
+  - name: brew
+    description: Homebrew 包管理器（bottles 和 git 仓库）
+    aliases: *id015
+  - name: scoop
+    description: Windows 的 Scoop 命令行安装器
+  - name: winget
+    description: Windows 包管理器仓库
+  - name: conda
+    description: Anaconda / Miniconda 包仓库
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央仓库
+    aliases: *id017
+  - name: gradle
+    description: Gradle 构建工具仓库
+  - name: nuget
+    description: .NET NuGet 包源
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK 和 pub 包
+  - name: dart
+    description: Dart pub 包仓库
+    aliases: *id019
+  - name: ruby
+    description: RubyGems 包仓库
+    aliases: *id020
+  - name: composer
+    description: PHP Composer 仓库（Packagist）
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN 包存档
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT 包存档
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT 包存档
+  - name: arch
+    description: Arch Linux pacman 包镜像
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM 仓库
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk 包镜像
+    aliases: *id026
+- name: list
+  aliases:
+  - ls
+  - l
+  description: 列出支持的语言、系统、软件或镜像
+  commands:
+  - name: mirror
+    description: 列出所有已知的镜像提供商（清华、阿里云、中科大等）
+  - name: dish
+    description: 列出所有支持的编程语言和包管理器
+  - name: lang
+    description: 列出支持的编程语言类别
+  - name: os
+    description: 列出支持的操作系统发行版类别
+  - name: ware
+    description: 列出支持的软件和包管理器类别
+- name: doctor
+  description: 诊断 chsrc 安装、系统 PATH 和网络连接

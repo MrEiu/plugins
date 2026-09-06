@@ -1,0 +1,752 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Español)
+name: shore
+description: Conmutador rápido e inteligente de fuentes espejo (impulsado por chsrc)
+standalone: true
+flags:
+  -h, --help: Mostrar información de ayuda
+  -v, --version: Mostrar versión
+commands:
+- name: set
+  aliases:
+  - s
+  description: Evaluación comparativa automática y cambio a la fuente espejo más rápida
+  commands:
+  - name: python
+    description: Índice de paquetes Python / PyPI
+    aliases: &id010
+    - py
+    commands:
+    - &id001
+      name: first
+      description: Espejo más rápido evaluado por los mantenedores ascendentes
+    - &id002
+      name: tuna
+      description: Espejo de código abierto de la Universidad de Tsinghua (TUNA)
+    - &id003
+      name: aliyun
+      description: Espejo de código abierto de Alibaba Cloud
+    - &id004
+      name: ustc
+      description: Universidad de Ciencia y Tecnología de China (USTC)
+    - &id005
+      name: tencent
+      description: Espejo público de Tencent Cloud
+    - &id006
+      name: huawei
+      description: Espejo de código abierto de Huawei Cloud
+    - &id007
+      name: '163'
+      description: Espejo de código abierto de NetEase
+    - &id008
+      name: bfsu
+      description: Espejo de la Universidad de Estudios Extranjeros de Beijing
+    - &id009
+      name: sjtu
+      description: Espejo de la Universidad Jiao Tong de Shanghái
+  - name: pip
+    description: Instalador de paquetes pip de Python
+    aliases: &id011
+    - pip3
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: uv
+    description: Gestor rápido de paquetes y proyectos de Python (Astral uv)
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: poetry
+    description: Empaquetado de Python y gestión de dependencias
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pdm
+    description: Gestor moderno de paquetes y dependencias de Python
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rye
+    description: Herramienta de gestión de paquetes de Python
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: npm
+    description: Gestor de paquetes de Node.js
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: yarn
+    description: Gestión de dependencias rápida, fiable y segura
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pnpm
+    description: Gestor de paquetes rápido y eficiente en espacio de disco
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: bun
+    description: Runtime de JavaScript y gestor de paquetes todo en uno
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: node
+    description: Distribuciones binarias de Node.js
+    aliases: &id012
+    - nodejs
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nvm
+    description: Gestor de versiones de Node.js
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cargo
+    description: Gestor de paquetes de Rust y registro de crates.io
+    aliases: &id013
+    - rust
+    - crates
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rustup
+    description: Instalador y actualizador de la cadena de herramientas de Rust
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: go
+    description: Proxy de módulos de Go y sumdb
+    aliases: &id014
+    - golang
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: docker
+    description: Espejo del registro del daemon de Docker
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: brew
+    description: Gestor de paquetes Homebrew (botellas y repositorios git)
+    aliases: &id015
+    - homebrew
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: scoop
+    description: Instalador de línea de comandos Scoop para Windows
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: winget
+    description: Repositorio del Administrador de paquetes de Windows
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: conda
+    description: Repositorios de paquetes de Anaconda / Miniconda
+    aliases: &id016
+    - anaconda
+    - miniconda
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: maven
+    description: Repositorio central de Apache Maven
+    aliases: &id017
+    - mvn
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: gradle
+    description: Repositorio de la herramienta de compilación Gradle
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nuget
+    description: Fuente de paquetes NuGet de .NET
+    aliases: &id018
+    - .net
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: flutter
+    description: SDK de Flutter y paquetes pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: dart
+    description: Repositorio de paquetes pub de Dart
+    aliases: &id019
+    - pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ruby
+    description: Repositorio de paquetes RubyGems
+    aliases: &id020
+    - gem
+    - rubygems
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: composer
+    description: Repositorio de Composer para PHP (Packagist)
+    aliases: &id021
+    - php
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cpan
+    description: Archivo de paquetes CPAN de Perl
+    aliases: &id022
+    - perl
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ubuntu
+    description: Archivos de paquetes APT de Ubuntu Linux
+    aliases: &id023
+    - apt
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: debian
+    description: Archivos de paquetes APT de Debian Linux
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: arch
+    description: Espejos de paquetes pacman de Arch Linux
+    aliases: &id024
+    - pacman
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: fedora
+    description: Repositorios RPM de Fedora Linux
+    aliases: &id025
+    - dnf
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: alpine
+    description: Espejos de paquetes apk de Alpine Linux
+    aliases: &id026
+    - apk
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+- name: get
+  aliases:
+  - g
+  description: Mostrar la configuración actual de la fuente de espejo activa
+  commands:
+  - name: python
+    description: Índice de paquetes Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Instalador de paquetes pip de Python
+    aliases: *id011
+  - name: uv
+    description: Gestor rápido de paquetes y proyectos de Python (Astral uv)
+  - name: poetry
+    description: Empaquetado de Python y gestión de dependencias
+  - name: pdm
+    description: Gestor moderno de paquetes y dependencias de Python
+  - name: rye
+    description: Herramienta de gestión de paquetes de Python
+  - name: npm
+    description: Gestor de paquetes de Node.js
+  - name: yarn
+    description: Gestión de dependencias rápida, fiable y segura
+  - name: pnpm
+    description: Gestor de paquetes rápido y eficiente en espacio de disco
+  - name: bun
+    description: Runtime de JavaScript y gestor de paquetes todo en uno
+  - name: node
+    description: Distribuciones binarias de Node.js
+    aliases: *id012
+  - name: nvm
+    description: Gestor de versiones de Node.js
+  - name: cargo
+    description: Gestor de paquetes de Rust y registro de crates.io
+    aliases: *id013
+  - name: rustup
+    description: Instalador y actualizador de la cadena de herramientas de Rust
+  - name: go
+    description: Proxy de módulos de Go y sumdb
+    aliases: *id014
+  - name: docker
+    description: Espejo del registro del daemon de Docker
+  - name: brew
+    description: Gestor de paquetes Homebrew (botellas y repositorios git)
+    aliases: *id015
+  - name: scoop
+    description: Instalador de línea de comandos Scoop para Windows
+  - name: winget
+    description: Repositorio del Administrador de paquetes de Windows
+  - name: conda
+    description: Repositorios de paquetes de Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Repositorio central de Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Repositorio de la herramienta de compilación Gradle
+  - name: nuget
+    description: Fuente de paquetes NuGet de .NET
+    aliases: *id018
+  - name: flutter
+    description: SDK de Flutter y paquetes pub
+  - name: dart
+    description: Repositorio de paquetes pub de Dart
+    aliases: *id019
+  - name: ruby
+    description: Repositorio de paquetes RubyGems
+    aliases: *id020
+  - name: composer
+    description: Repositorio de Composer para PHP (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Archivo de paquetes CPAN de Perl
+    aliases: *id022
+  - name: ubuntu
+    description: Archivos de paquetes APT de Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Archivos de paquetes APT de Debian Linux
+  - name: arch
+    description: Espejos de paquetes pacman de Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Repositorios RPM de Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Espejos de paquetes apk de Alpine Linux
+    aliases: *id026
+- name: reset
+  aliases:
+  - r
+  description: Restablecer a la fuente oficial predeterminada
+  commands:
+  - name: python
+    description: Índice de paquetes Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Instalador de paquetes pip de Python
+    aliases: *id011
+  - name: uv
+    description: Gestor rápido de paquetes y proyectos de Python (Astral uv)
+  - name: poetry
+    description: Empaquetado de Python y gestión de dependencias
+  - name: pdm
+    description: Gestor moderno de paquetes y dependencias de Python
+  - name: rye
+    description: Herramienta de gestión de paquetes de Python
+  - name: npm
+    description: Gestor de paquetes de Node.js
+  - name: yarn
+    description: Gestión de dependencias rápida, fiable y segura
+  - name: pnpm
+    description: Gestor de paquetes rápido y eficiente en espacio de disco
+  - name: bun
+    description: Runtime de JavaScript y gestor de paquetes todo en uno
+  - name: node
+    description: Distribuciones binarias de Node.js
+    aliases: *id012
+  - name: nvm
+    description: Gestor de versiones de Node.js
+  - name: cargo
+    description: Gestor de paquetes de Rust y registro de crates.io
+    aliases: *id013
+  - name: rustup
+    description: Instalador y actualizador de la cadena de herramientas de Rust
+  - name: go
+    description: Proxy de módulos de Go y sumdb
+    aliases: *id014
+  - name: docker
+    description: Espejo del registro del daemon de Docker
+  - name: brew
+    description: Gestor de paquetes Homebrew (botellas y repositorios git)
+    aliases: *id015
+  - name: scoop
+    description: Instalador de línea de comandos Scoop para Windows
+  - name: winget
+    description: Repositorio del Administrador de paquetes de Windows
+  - name: conda
+    description: Repositorios de paquetes de Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Repositorio central de Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Repositorio de la herramienta de compilación Gradle
+  - name: nuget
+    description: Fuente de paquetes NuGet de .NET
+    aliases: *id018
+  - name: flutter
+    description: SDK de Flutter y paquetes pub
+  - name: dart
+    description: Repositorio de paquetes pub de Dart
+    aliases: *id019
+  - name: ruby
+    description: Repositorio de paquetes RubyGems
+    aliases: *id020
+  - name: composer
+    description: Repositorio de Composer para PHP (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Archivo de paquetes CPAN de Perl
+    aliases: *id022
+  - name: ubuntu
+    description: Archivos de paquetes APT de Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Archivos de paquetes APT de Debian Linux
+  - name: arch
+    description: Espejos de paquetes pacman de Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Repositorios RPM de Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Espejos de paquetes apk de Alpine Linux
+    aliases: *id026
+- name: measure
+  aliases:
+  - m
+  - speed
+  - cesu
+  description: Probar velocidad y comparar todas las fuentes de espejo disponibles
+  commands:
+  - name: python
+    description: Índice de paquetes Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Instalador de paquetes pip de Python
+    aliases: *id011
+  - name: uv
+    description: Gestor rápido de paquetes y proyectos de Python (Astral uv)
+  - name: poetry
+    description: Empaquetado de Python y gestión de dependencias
+  - name: pdm
+    description: Gestor moderno de paquetes y dependencias de Python
+  - name: rye
+    description: Herramienta de gestión de paquetes de Python
+  - name: npm
+    description: Gestor de paquetes de Node.js
+  - name: yarn
+    description: Gestión de dependencias rápida, fiable y segura
+  - name: pnpm
+    description: Gestor de paquetes rápido y eficiente en espacio de disco
+  - name: bun
+    description: Runtime de JavaScript y gestor de paquetes todo en uno
+  - name: node
+    description: Distribuciones binarias de Node.js
+    aliases: *id012
+  - name: nvm
+    description: Gestor de versiones de Node.js
+  - name: cargo
+    description: Gestor de paquetes de Rust y registro de crates.io
+    aliases: *id013
+  - name: rustup
+    description: Instalador y actualizador de la cadena de herramientas de Rust
+  - name: go
+    description: Proxy de módulos de Go y sumdb
+    aliases: *id014
+  - name: docker
+    description: Espejo del registro del daemon de Docker
+  - name: brew
+    description: Gestor de paquetes Homebrew (botellas y repositorios git)
+    aliases: *id015
+  - name: scoop
+    description: Instalador de línea de comandos Scoop para Windows
+  - name: winget
+    description: Repositorio del Administrador de paquetes de Windows
+  - name: conda
+    description: Repositorios de paquetes de Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Repositorio central de Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Repositorio de la herramienta de compilación Gradle
+  - name: nuget
+    description: Fuente de paquetes NuGet de .NET
+    aliases: *id018
+  - name: flutter
+    description: SDK de Flutter y paquetes pub
+  - name: dart
+    description: Repositorio de paquetes pub de Dart
+    aliases: *id019
+  - name: ruby
+    description: Repositorio de paquetes RubyGems
+    aliases: *id020
+  - name: composer
+    description: Repositorio de Composer para PHP (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Archivo de paquetes CPAN de Perl
+    aliases: *id022
+  - name: ubuntu
+    description: Archivos de paquetes APT de Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Archivos de paquetes APT de Debian Linux
+  - name: arch
+    description: Espejos de paquetes pacman de Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Repositorios RPM de Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Espejos de paquetes apk de Alpine Linux
+    aliases: *id026
+- name: list
+  aliases:
+  - ls
+  - l
+  description: Listar lenguajes, sistemas, software o espejos compatibles
+  commands:
+  - name: mirror
+    description: Listar todos los proveedores de espejos conocidos (Tsinghua, Aliyun,
+      USTC, etc.)
+  - name: dish
+    description: Listar todos los lenguajes de programación y gestores de paquetes
+      compatibles
+  - name: lang
+    description: Listar platos de lenguajes de programación compatibles
+  - name: os
+    description: Listar platos de distribuciones de sistemas operativos compatibles
+  - name: ware
+    description: Listar platos de software y gestores de paquetes compatibles
+- name: doctor
+  description: Diagnosticar la instalación de chsrc, el PATH del sistema y la conectividad
+    de red

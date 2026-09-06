@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://carapace.sh/schemas/command.json
 name: alias
-description: "Cross-platform command alias translation and mapping"
+description: "Cross-platform command alias mapping and ultra modern CLI tools management"
 standalone: false
 
 flags:
@@ -9,24 +9,41 @@ flags:
 commands:
   - name: list
     aliases: ["ls"]
-    description: "List all active command mappings"
+    description: "Display registered alias mappings and ultra modern tools status"
     flags:
-      -j, --json: "Output mappings formatted as JSON"
+      -p, --platform=: "Filter mappings by target shell platform"
+    completion:
+      flag:
+        platform: ["universal\tAll platforms", "pwsh\tPowerShell 7+", "cmd\tWindows CMD", "bash\tGNU Bash", "zsh\tZ Shell", "powershell\tWindows PowerShell"]
+
   - name: add
-    description: "Add a new command alias mapping"
+    description: "Add or update a command alias mapping (default current platform)"
     flags:
-      -f, --from=: "Source universal command name (e.g. ll, rm, cat)"
-      -t, --to=: "Target host shell command template (e.g. Get-ChildItem)"
-      -s, --shell=: "Target shell filter (pwsh|cmd|bash|zsh)"
-      -g, --global: "Persist mapping to global user data directory"
+      -p, --platform=: "Target shell platform (default active shell)"
+      -d, --desc=: "Human-readable description for the alias"
+    completion:
+      flag:
+        platform: ["universal\tAll platforms", "pwsh\tPowerShell 7+", "cmd\tWindows CMD", "bash\tGNU Bash", "zsh\tZ Shell", "powershell\tWindows PowerShell"]
+
   - name: remove
     aliases: ["rm", "delete"]
-    description: "Remove an existing alias mapping"
+    description: "Remove an alias or specific platform template"
     flags:
-      -f, --from=: "Alias name to remove"
+      -p, --platform=: "Remove only specified platform template"
+    completion:
+      flag:
+        platform: ["universal\tAll platforms", "pwsh\tPowerShell 7+", "cmd\tWindows CMD", "bash\tGNU Bash", "zsh\tZ Shell", "powershell\tWindows PowerShell"]
+
   - name: test
-    description: "Dry-run and inspect command translation without execution"
+    description: "Preview command translation across shell platforms without executing"
+
   - name: reset
-    description: "Reset mappings to built-in defaults"
+    description: "Reset all mappings to 36+ Linux-First baseline defaults"
     flags:
-      --force: "Bypass confirmation prompt"
+      --hard: "Completely overwrite all custom aliases"
+
+  - name: ultra
+    description: "One-click install modern high-performance CLI tools (eza, bat, rg, fd, procs, dust, etc.)"
+    flags:
+      -n, --dry-run: "Simulate installation without making system changes"
+      --force: "Force reinstall all ultra modern tools"

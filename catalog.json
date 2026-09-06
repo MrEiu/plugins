@@ -1,0 +1,63 @@
+{
+  "_ai_directive": "MANDATORY FOR AI ASSISTANTS: Whenever you modify any plugin, you MUST increment its version by at least one patch step following base-10 decimal rollover at 9 (e.g. 0.1.8 -> 0.1.9 -> 0.2.0, 0.2.9 -> 0.3.0). You MUST synchronize the incremented version in the plugin's manifest (plugin.py) and record both the new version and changelog in this catalog.json.",
+  "ai": {
+    "version": "0.1.2",
+    "description": "Native terminal AI assistant powered by OpenAI Python SDK with pure CLI interactive tools.",
+    "changelog": "Added dynamic /models endpoint probing with static fallback across 10 official LLM providers."
+  },
+  "alias": {
+    "version": "0.2.2",
+    "description": "Multi-terminal command mapping translating universal aliases to host shell commands.",
+    "changelog": "Added multi-language Carapace completion specifications across 7 languages."
+  },
+  "autopilot": {
+    "version": "0.1.0",
+    "description": "Autonomous background task queue and daemon execution manager powered by Pueue.",
+    "changelog": "Task daemon queue management and background task execution."
+  },
+  "fuck": {
+    "version": "0.1.0",
+    "description": "Command auto-correction tool powered by thefuck.",
+    "changelog": "Interactive rule-based command typo correction."
+  },
+  "help": {
+    "version": "0.1.0",
+    "description": "Fast command cheat sheets and quick lookup powered by tealdeer (tldr).",
+    "changelog": "Fast offline and online command cheat sheet browser."
+  },
+  "init": {
+    "version": "0.1.1",
+    "description": "Project development environment and tool runtime initializer powered by mise.",
+    "changelog": "Added multi-language Carapace completion specifications across 7 languages."
+  },
+  "install": {
+    "version": "0.2.0",
+    "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
+    "changelog": "Added platform-adaptive package manager priority ordering."
+  },
+  "portal": {
+    "version": "0.1.2",
+    "description": "Smart directory teleportation and workspace navigator powered by zoxide.",
+    "changelog": "Added multi-language Carapace completion specifications across 7 languages."
+  },
+  "profile": {
+    "version": "0.1.0",
+    "description": "Cross-platform dotfile and shell profile manager powered by chezmoi.",
+    "changelog": "Dotfile management and workspace profile sync via chezmoi."
+  },
+  "rec": {
+    "version": "0.1.0",
+    "description": "Command snippet recorder and runner powered by pet CLI.",
+    "changelog": "Command snippet recorder and fuzzy runner via pet."
+  },
+  "shore": {
+    "version": "0.1.1",
+    "description": "Fast intelligent mirror source switcher powered by chsrc.",
+    "changelog": "Added multi-language Carapace completion specifications across 7 languages."
+  },
+  "update": {
+    "version": "0.1.0",
+    "description": "Scan and update available plugin catalog and completion dictionary.",
+    "changelog": "Catalog dictionary update scanner."
+  }
+}

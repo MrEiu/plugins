@@ -1,0 +1,68 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Русский)
+name: alias
+description: Кроссплатформенное сопоставление псевдонимов команд и управление современными
+  CLI-инструментами
+standalone: false
+flags:
+  -h, --help: Показать справочную информацию
+commands:
+- name: list
+  aliases:
+  - ls
+  description: Показать зарегистрированные сопоставления псевдонимов и статус современных
+    инструментов
+  flags:
+    -p, --platform=: Фильтровать сопоставления по целевой платформе оболочки
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: add
+  description: Добавить или обновить сопоставление псевдонима команды (по умолчанию
+    текущая платформа)
+  flags:
+    -p, --platform=: Целевая платформа оболочки (по умолчанию активная оболочка)
+    -d, --desc=: Понятное описание для псевдонима
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: remove
+  aliases:
+  - rm
+  - delete
+  description: Удалить псевдоним или шаблон для конкретной платформы
+  flags:
+    -p, --platform=: Удалить только указанный шаблон платформы
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: test
+  description: Предпросмотр перевода команд между платформами оболочки без выполнения
+- name: reset
+  description: Сбросить все сопоставления к базовым настройкам по умолчанию (36+ Linux-First)
+  flags:
+    --hard: Полностью перезаписать все пользовательские псевдонимы
+- name: ultra
+  description: Установка современных высокопроизводительных CLI-инструментов в один
+    клик (eza, bat, rg, fd, procs, dust и т.д.)
+  flags:
+    -n, --dry-run: Симулировать установку без внесения изменений в систему
+    --force: Принудительно переустановить все современные инструменты

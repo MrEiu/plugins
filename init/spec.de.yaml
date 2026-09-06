@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Deutsch)
+name: init
+description: Initialisierer für Projektentwicklungsumgebung und Tool-Laufzeiten (unterstützt
+  von mise)
+standalone: false
+flags:
+  -h, --help: Hilfeinformationen anzeigen
+commands:
+- name: use
+  description: Tool-Laufzeit im Projekt festlegen und installieren (z. B. node@22
+    verwenden)
+- name: ls
+  aliases:
+  - list
+  description: Installierte und aktive Tool-Laufzeiten auflisten
+- name: current
+  description: Aktive Laufzeitversionen im aktuellen Verzeichnis anzeigen
+- name: doctor
+  description: mise-Umgebung und PATH-Integrität diagnostizieren
+- name: upgrade
+  description: Veraltete Tool-Laufzeiten im aktuellen Projekt aktualisieren
+- name: run
+  description: Projektaufgabe aus mise.toml ausführen

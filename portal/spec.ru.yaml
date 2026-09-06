@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Русский)
+name: portal
+description: Умная навигация по каталогам и рабочим пространствам (на базе zoxide)
+standalone: true
+flags:
+  -h, --help: Показать справочную информацию
+commands:
+- name: ls
+  aliases:
+  - list
+  description: Список ранжированных каталогов и оценок frecency
+  flags:
+    -s, --score: Показывать оценку в результатах
+- name: add
+  aliases:
+  - +
+  description: 'Добавить каталог в базу данных (по умолчанию: текущий каталог)'
+- name: rm
+  aliases:
+  - remove
+  - '-'
+  description: Удалить каталог из базы данных
+- name: query
+  description: Поиск каталога в базе данных
+- name: open
+  aliases:
+  - explore
+  description: Открыть каталог в системном файловом менеджере
+- name: doctor
+  description: Диагностика установки и окружения zoxide
+- name: edit
+  description: Напрямую редактировать базу данных zoxide
+- name: init
+  description: Сгенерировать конфигурацию внешнего хука оболочки

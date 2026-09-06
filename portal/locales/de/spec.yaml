@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Deutsch)
+name: portal
+description: Intelligente Verzeichnis-Teleportation und Arbeitsbereichsnavigation
+  (unterstützt von zoxide)
+standalone: true
+flags:
+  -h, --help: Hilfeinformationen anzeigen
+commands:
+- name: ls
+  aliases:
+  - list
+  description: Rangierte Verzeichnisse und Frecency-Werte auflisten
+  flags:
+    -s, --score: Punktzahl mit Ergebnissen ausgeben
+- name: add
+  aliases:
+  - +
+  description: 'Verzeichnis zur Datenbank hinzufügen (Standard: aktuelles Verzeichnis)'
+- name: rm
+  aliases:
+  - remove
+  - '-'
+  description: Verzeichnis aus Datenbank entfernen
+- name: query
+  description: In Datenbank nach Verzeichnis suchen
+- name: open
+  aliases:
+  - explore
+  description: Verzeichnis im nativen Datei-Explorer öffnen
+- name: doctor
+  description: zoxide-Installation und Umgebung diagnostizieren
+- name: edit
+  description: zoxide-Datenbank direkt bearbeiten
+- name: init
+  description: Externe Shell-Hook-Konfiguration generieren

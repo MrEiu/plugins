@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (日本語)
+name: init
+description: 项目开发环境与工具运行时初始化器（由mise驱动）
+standalone: false
+flags:
+  -h, --help: 显示帮助信息
+commands:
+- name: use
+  description: 在项目中固定并安装工具运行时（例如使用node@22）
+- name: ls
+  aliases:
+  - list
+  description: 列出已安装和活动的工具运行时
+- name: current
+  description: 显示当前目录中的活动运行时版本
+- name: doctor
+  description: 诊断mise环境和PATH健康状况
+- name: upgrade
+  description: 升级当前项目中过时的工具运行时
+- name: run
+  description: 执行mise.toml中定义的项目任务

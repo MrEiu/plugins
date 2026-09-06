@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Français)
+name: alias
+description: Gestion des alias de commandes multiplateformes et des outils CLI ultra
+  modernes
+standalone: false
+flags:
+  -h, --help: Afficher l'aide
+commands:
+- name: list
+  aliases:
+  - ls
+  description: Afficher les alias enregistrés et l'état des outils ultra modernes
+  flags:
+    -p, --platform=: Filtrer les alias par plateforme shell cible
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: add
+  description: Ajouter ou mettre à jour un alias de commande (plateforme actuelle
+    par défaut)
+  flags:
+    -p, --platform=: Plateforme shell cible (shell actif par défaut)
+    -d, --desc=: Description lisible pour l'alias
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: remove
+  aliases:
+  - rm
+  - delete
+  description: Supprimer un alias ou un modèle de plateforme spécifique
+  flags:
+    -p, --platform=: Supprimer uniquement le modèle de plateforme spécifié
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: test
+  description: Aperçu de la traduction des commandes entre plateformes shell sans
+    exécution
+- name: reset
+  description: Réinitialiser tous les alias aux valeurs par défaut de base Linux-First
+    (36+)
+  flags:
+    --hard: Écraser complètement tous les alias personnalisés
+- name: ultra
+  description: Installation en un clic des outils CLI modernes et performants (eza,
+    bat, rg, fd, procs, dust, etc.)
+  flags:
+    -n, --dry-run: Simuler l'installation sans modifier le système
+    --force: Forcer la réinstallation de tous les outils ultra modernes

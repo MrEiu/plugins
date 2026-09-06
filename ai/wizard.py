@@ -1,148 +1,34 @@
 """
 Kapsel AI Plugin - Interactive Setup Wizard.
-Guides users step-by-step through configuring LLM providers and models for aichat.
+Guides users step-by-step through configuring LLM providers and models using OpenAI Python SDK.
 All comments and descriptions are in English.
 """
 
 from getpass import getpass
 import os
 from pathlib import Path
-import shutil
-import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console
 from rich.panel import Panel
-import yaml
 
-from kapsel.storage.config import get_kapsel_dir
 from kapsel.ui.banner import ensure_utf8_io
+from .config import DEFAULT_PROVIDERS, get_ai_config_file, save_ai_config, load_ai_config, get_provider_models
+from .client import AiClient
 
 ensure_utf8_io()
-
-# Predefined popular providers and default configurations
-PROVIDERS = [
-    {
-        "id": "openai",
-        "name": "OpenAI (Official API)",
-        "type": "openai",
-        "client_name": "openai",
-        "api_base": "https://api.openai.com/v1",
-        "default_model": "gpt-4o",
-        "models": ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1"],
-        "requires_key": True,
-        "key_prompt": "Enter OpenAI API Key (sk-...): ",
-    },
-    {
-        "id": "gemini",
-        "name": "Google Gemini (Official OpenAI-Compatible Endpoint)",
-        "type": "openai-compatible",
-        "client_name": "gemini",
-        "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.0-flash",
-        "models": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"],
-        "requires_key": True,
-        "key_prompt": "Enter Google AI Studio API Key (AIzaSy...): ",
-    },
-    {
-        "id": "claude",
-        "name": "Anthropic Claude (Official API)",
-        "type": "claude",
-        "client_name": "claude",
-        "api_base": "https://api.anthropic.com/v1",
-        "default_model": "claude-3-7-sonnet-20250219",
-        "models": ["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
-        "requires_key": True,
-        "key_prompt": "Enter Anthropic API Key (sk-ant-...): ",
-    },
-    {
-        "id": "deepseek",
-        "name": "DeepSeek (Official API)",
-        "type": "openai-compatible",
-        "client_name": "deepseek",
-        "api_base": "https://api.deepseek.com/v1",
-        "default_model": "deepseek-chat",
-        "models": ["deepseek-chat", "deepseek-reasoner"],
-        "requires_key": True,
-        "key_prompt": "Enter DeepSeek API Key (sk-...): ",
-    },
-    {
-        "id": "ollama",
-        "name": "Ollama (Local LLM - Free & Private, No API Key)",
-        "type": "openai-compatible",
-        "client_name": "ollama",
-        "api_base": "http://localhost:11434/v1",
-        "default_model": "deepseek-r1:latest",
-        "models": ["deepseek-r1:latest", "llama3.3:latest", "qwen2.5-coder:latest", "qwen2.5:latest"],
-        "requires_key": False,
-        "key_prompt": "",
-    },
-    {
-        "id": "siliconflow",
-        "name": "SiliconFlow / 硅基流动 (High-speed Cloud Models)",
-        "type": "openai-compatible",
-        "client_name": "siliconflow",
-        "api_base": "https://api.siliconflow.cn/v1",
-        "default_model": "deepseek-ai/DeepSeek-V3",
-        "models": ["deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1", "Qwen/Qwen2.5-72B-Instruct"],
-        "requires_key": True,
-        "key_prompt": "Enter SiliconFlow API Key (sk-...): ",
-    },
-    {
-        "id": "custom",
-        "name": "Custom OpenAI-Compatible (OneAPI, NewAPI, vLLM, etc.)",
-        "type": "openai-compatible",
-        "client_name": "custom",
-        "api_base": "",
-        "default_model": "gpt-4o",
-        "models": [],
-        "requires_key": True,
-        "key_prompt": "Enter Custom API Key: ",
-    },
-]
-
-
-def get_ai_config_dir() -> Path:
-    """Returns the dedicated configuration directory for aichat managed by Kapsel."""
-    cfg_dir = get_kapsel_dir() / "ai"
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    return cfg_dir
-
-
-def get_ai_config_file() -> Path:
-    """Returns the path to config.yaml within Kapsel data directory."""
-    return get_ai_config_dir() / "config.yaml"
-
-
-def sync_to_system_config_dir(config_content: str) -> None:
-    """
-    Also copies configuration to the system-level aichat default directory
-    so standalone aichat executions outside Kapsel can seamlessly use the same config.
-    """
-    try:
-        if sys.platform == "win32":
-            roaming = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
-            target_dir = roaming / "aichat"
-        elif sys.platform == "darwin":
-            target_dir = Path.home() / "Library/Application Support/aichat"
-        else:
-            target_dir = Path.home() / ".config/aichat"
-
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "config.yaml").write_text(config_content, encoding="utf-8")
-    except Exception:
-        pass
 
 
 def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
     """
-    Runs an interactive terminal wizard to configure an AI provider for aichat.
+    Runs an interactive terminal wizard to configure an AI provider.
+    Saves to ~/.kapsel/ai/config.yaml and verifies connectivity.
     """
     con = console or Console(legacy_windows=False)
 
     menu_lines = ["[bold #00f0ff]Select an AI model provider to configure:[/]\n"]
-    for idx, prov in enumerate(PROVIDERS, start=1):
+    for idx, prov in enumerate(DEFAULT_PROVIDERS, start=1):
         menu_lines.append(f"  [bold #a855f7][{idx}][/] [white]{prov['name']}[/]")
 
     con.print(Panel("\n".join(menu_lines), title="[bold #00f0ff]🤖 Kapsel AI Setup Wizard (kps ai init)[/]", border_style="#0891b2"))
@@ -150,13 +36,13 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
     # Interactive prompt sequence
     try:
         # 1. Choice of provider
-        raw_choice = input(f"Enter choice [1-{len(PROVIDERS)}] (default: 1): ").strip()
+        raw_choice = input(f"Enter choice [1-{len(DEFAULT_PROVIDERS)}] (default: 1): ").strip()
         choice_idx = int(raw_choice) - 1 if raw_choice else 0
-        if not (0 <= choice_idx < len(PROVIDERS)):
-            con.print(f"[bold #f43f5e]Invalid selection. Defaulting to {PROVIDERS[0]['name']}.[/]")
+        if not (0 <= choice_idx < len(DEFAULT_PROVIDERS)):
+            con.print(f"[bold #f43f5e]Invalid selection. Defaulting to {DEFAULT_PROVIDERS[0]['name']}.[/]")
             choice_idx = 0
 
-        selected = PROVIDERS[choice_idx]
+        selected = DEFAULT_PROVIDERS[choice_idx]
         con.print(f"\n[bold #10b981]✔ Selected:[/] [white]{selected['name']}[/]\n")
 
         # 2. Base URL
@@ -174,89 +60,67 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
         if selected["requires_key"]:
             api_key = getpass(selected["key_prompt"]).strip()
             if not api_key:
-                con.print("[yellow]Warning: Empty API key provided. Some requests may be rejected by the provider.[/]")
+                con.print("[yellow]Warning: Empty API key provided. Requests may fail if authentication is required.[/]")
         else:
-            con.print("[dim]No API key required for local Ollama.[/]")
+            con.print("[dim]No API key required for local provider.[/]")
 
-        # 4. Model Selection
-        default_model = selected["default_model"]
-        if selected["id"] == "custom":
-            model_name = input("Enter Model Name (e.g. gpt-4o, qwen-max): ").strip() or "gpt-4o"
-        else:
-            con.print(f"[dim]Suggested models:[/] {', '.join(selected['models'])}")
-            model_input = input(f"Default Model [{default_model}]: ").strip()
-            model_name = model_input if model_input else default_model
+        # 4. Model Selection (Dynamic /models probe with static fallback)
+        default_model = selected["model"]
+        available_models = get_provider_models(
+            provider_id=selected["id"],
+            api_base=api_base,
+            api_key=api_key,
+        )
+        if available_models:
+            display_models = available_models[:8]
+            suffix = f" ... (+{len(available_models) - 8} more)" if len(available_models) > 8 else ""
+            con.print(f"[dim]Available models:[/] {', '.join(display_models)}{suffix}")
+            if default_model not in available_models and available_models:
+                default_model = available_models[0]
+
+        model_input = input(f"Default Model [{default_model}]: ").strip()
+        model_name = model_input if model_input else default_model
 
     except (ValueError, KeyboardInterrupt, EOFError):
         con.print("\n[dim]Setup aborted.[/]")
         return 1
 
-    client_name = selected["client_name"]
-
     # 5. Build configuration structure
-    client_entry: Dict[str, Any] = {
-        "type": selected["type"],
-        "name": client_name,
-    }
-    if api_base:
-        client_entry["api_base"] = api_base
-    if api_key:
-        client_entry["api_key"] = api_key
-    if selected["models"]:
-        client_entry["models"] = [{"name": m} for m in selected["models"]]
-
-    config_data: Dict[str, Any] = {
-        "model": f"{client_name}:{model_name}",
-        "stream": True,
-        "save": False,
-        "keybindings": "emacs",
-        "wrap": "auto",
-        "wrap_code": False,
-        "highlight": True,
-        "clients": [client_entry],
+    cfg_data: Dict[str, Any] = {
+        "provider": selected["id"],
+        "provider_name": selected["name"],
+        "api_base": api_base,
+        "api_key": api_key,
+        "model": model_name,
+        "temperature": 0.1,
     }
 
-    yaml_text = yaml.dump(config_data, sort_keys=False, allow_unicode=True)
-
-    # 6. Save configuration to Kapsel and system directories
+    # 6. Save configuration to Kapsel data directory
+    save_ai_config(cfg_data)
     target_file = get_ai_config_file()
-    target_file.write_text(yaml_text, encoding="utf-8")
-    sync_to_system_config_dir(yaml_text)
 
     con.print(f"\n[bold #10b981]✔ Configuration successfully saved![/]")
-    con.print(f"[dim]Kapsel config file: {target_file}[/]")
+    con.print(f"[dim]Config file: {target_file}[/]")
 
-    # 7. Quick verification test
-    con.print("\n[dim]Testing configuration with local aichat...[/]")
-    test_res = verify_ai_configuration(console=con)
-    if test_res == 0:
-        con.print("[bold #10b981]✨ AI setup complete! You can now use:[/] [bold #00f0ff]kps ai <question>[/]\n")
-    else:
-        con.print("[yellow]Notice: Configuration written, but model connection test reported warnings. Please verify your network or API Key.[/]\n")
-
-    return 0
-
-
-def verify_ai_configuration(console: Optional[Console] = None) -> int:
-    """Verifies that aichat loads the current configuration correctly."""
-    from .plugin import _resolve_aichat_executable
-    aichat_bin = _resolve_aichat_executable()
-    if not aichat_bin:
-        return 1
-
-    env = os.environ.copy()
-    env["AICHAT_CONFIG_DIR"] = str(get_ai_config_dir())
-
+    # 7. Verification test using AiClient
+    con.print("\n[dim]Testing connectivity with configured model endpoint...[/]")
     try:
-        res = subprocess.run(
-            [aichat_bin, "--dry-run", "test"],
-            env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5.0,
+        client = AiClient(api_base=api_base, api_key=api_key, model=model_name, timeout=12.0)
+        res = client.chat_completion(
+            messages=[{"role": "user", "content": "Respond with 'pong' only"}],
+            temperature=0.1,
         )
-        return res.returncode
-    except Exception:
-        return 1
+        if res:
+            con.print(f"[bold #10b981]✔ Model responded successfully:[/] [dim]{res[:60]}[/]")
+            con.print("\n[bold #10b981]✨ AI setup complete![/] You can now use:")
+            con.print("  [bold #00f0ff]kps ai <prompt>[/]     - Natural language to command")
+            con.print("  [bold #00f0ff]kps ai fix[/]          - Auto-diagnose and fix last failed command")
+            con.print("  [bold #00f0ff]kps ai commit[/]       - Generate Git commit from diff\n")
+            return 0
+        else:
+            con.print("[yellow]Notice: Model connected but returned empty response. Please verify settings.[/]\n")
+            return 0
+    except Exception as e:
+        con.print(f"[yellow]Notice: Configuration written, but test ping returned warning: {e}[/]")
+        con.print("[dim]You can test again anytime with:[/] [bold #00f0ff]kps ai config test[/]\n")
+        return 0

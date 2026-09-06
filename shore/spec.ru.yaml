@@ -1,0 +1,754 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Русский)
+name: shore
+description: Быстрый интеллектуальный переключатель зеркальных источников (на базе
+  chsrc)
+standalone: true
+flags:
+  -h, --help: Показать справочную информацию
+  -v, --version: Показать версию
+commands:
+- name: set
+  aliases:
+  - s
+  description: Автоматическое тестирование и переключение на самый быстрый зеркальный
+    источник
+  commands:
+  - name: python
+    description: Индекс пакетов Python / PyPI
+    aliases: &id010
+    - py
+    commands:
+    - &id001
+      name: first
+      description: Самое быстрое зеркало по результатам тестов вышестоящих разработчиков
+    - &id002
+      name: tuna
+      description: Зеркало открытого ПО Университета Цинхуа (TUNA)
+    - &id003
+      name: aliyun
+      description: Зеркало открытого ПО Alibaba Cloud
+    - &id004
+      name: ustc
+      description: Университет науки и технологий Китая (USTC)
+    - &id005
+      name: tencent
+      description: Публичное зеркало Tencent Cloud
+    - &id006
+      name: huawei
+      description: Зеркало открытого ПО Huawei Cloud
+    - &id007
+      name: '163'
+      description: Зеркало открытого ПО NetEase
+    - &id008
+      name: bfsu
+      description: Зеркало Пекинского университета иностранных языков
+    - &id009
+      name: sjtu
+      description: Зеркало Шанхайского университета Цзяотун
+  - name: pip
+    description: Установщик пакетов Python pip
+    aliases: &id011
+    - pip3
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: uv
+    description: Быстрый менеджер пакетов и проектов Python (Astral uv)
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: poetry
+    description: Управление упаковкой и зависимостями Python
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pdm
+    description: Современный менеджер пакетов и зависимостей Python
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rye
+    description: Инструмент управления пакетами Python
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: npm
+    description: Менеджер пакетов Node.js
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: yarn
+    description: Быстрое, надежное и безопасное управление зависимостями
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pnpm
+    description: Быстрый и эффективный по дисковому пространству менеджер пакетов
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: bun
+    description: Универсальная среда выполнения JavaScript и менеджер пакетов
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: node
+    description: Двоичные дистрибутивы Node.js
+    aliases: &id012
+    - nodejs
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nvm
+    description: Менеджер версий Node.js
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cargo
+    description: Менеджер пакетов Rust и реестр crates.io
+    aliases: &id013
+    - rust
+    - crates
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rustup
+    description: Установщик и обновлятель инструментария Rust
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: go
+    description: Прокси модулей Go и sumdb
+    aliases: &id014
+    - golang
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: docker
+    description: Зеркало реестра демона Docker
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: brew
+    description: Менеджер пакетов Homebrew (бутылки и git-репозитории)
+    aliases: &id015
+    - homebrew
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: scoop
+    description: Командный установщик Scoop для Windows
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: winget
+    description: Репозиторий Windows Package Manager
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: conda
+    description: Репозитории пакетов Anaconda / Miniconda
+    aliases: &id016
+    - anaconda
+    - miniconda
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: maven
+    description: Центральный репозиторий Apache Maven
+    aliases: &id017
+    - mvn
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: gradle
+    description: Репозиторий инструмента сборки Gradle
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nuget
+    description: Канал пакетов .NET NuGet
+    aliases: &id018
+    - .net
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: flutter
+    description: Flutter SDK и pub-пакеты
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: dart
+    description: Репозиторий пакетов Dart pub
+    aliases: &id019
+    - pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ruby
+    description: Репозиторий пакетов RubyGems
+    aliases: &id020
+    - gem
+    - rubygems
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: composer
+    description: Репозиторий PHP Composer (Packagist)
+    aliases: &id021
+    - php
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cpan
+    description: Архив пакетов Perl CPAN
+    aliases: &id022
+    - perl
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ubuntu
+    description: Архивы пакетов APT для Ubuntu Linux
+    aliases: &id023
+    - apt
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: debian
+    description: Архивы пакетов APT для Debian Linux
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: arch
+    description: Зеркала пакетов pacman для Arch Linux
+    aliases: &id024
+    - pacman
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: fedora
+    description: Репозитории RPM для Fedora Linux
+    aliases: &id025
+    - dnf
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: alpine
+    description: Зеркала пакетов apk для Alpine Linux
+    aliases: &id026
+    - apk
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+- name: get
+  aliases:
+  - g
+  description: Показать текущую активную конфигурацию источника зеркала
+  commands:
+  - name: python
+    description: Индекс пакетов Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Установщик пакетов Python pip
+    aliases: *id011
+  - name: uv
+    description: Быстрый менеджер пакетов и проектов Python (Astral uv)
+  - name: poetry
+    description: Управление упаковкой и зависимостями Python
+  - name: pdm
+    description: Современный менеджер пакетов и зависимостей Python
+  - name: rye
+    description: Инструмент управления пакетами Python
+  - name: npm
+    description: Менеджер пакетов Node.js
+  - name: yarn
+    description: Быстрое, надежное и безопасное управление зависимостями
+  - name: pnpm
+    description: Быстрый и эффективный по дисковому пространству менеджер пакетов
+  - name: bun
+    description: Универсальная среда выполнения JavaScript и менеджер пакетов
+  - name: node
+    description: Двоичные дистрибутивы Node.js
+    aliases: *id012
+  - name: nvm
+    description: Менеджер версий Node.js
+  - name: cargo
+    description: Менеджер пакетов Rust и реестр crates.io
+    aliases: *id013
+  - name: rustup
+    description: Установщик и обновлятель инструментария Rust
+  - name: go
+    description: Прокси модулей Go и sumdb
+    aliases: *id014
+  - name: docker
+    description: Зеркало реестра демона Docker
+  - name: brew
+    description: Менеджер пакетов Homebrew (бутылки и git-репозитории)
+    aliases: *id015
+  - name: scoop
+    description: Командный установщик Scoop для Windows
+  - name: winget
+    description: Репозиторий Windows Package Manager
+  - name: conda
+    description: Репозитории пакетов Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Центральный репозиторий Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Репозиторий инструмента сборки Gradle
+  - name: nuget
+    description: Канал пакетов .NET NuGet
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK и pub-пакеты
+  - name: dart
+    description: Репозиторий пакетов Dart pub
+    aliases: *id019
+  - name: ruby
+    description: Репозиторий пакетов RubyGems
+    aliases: *id020
+  - name: composer
+    description: Репозиторий PHP Composer (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Архив пакетов Perl CPAN
+    aliases: *id022
+  - name: ubuntu
+    description: Архивы пакетов APT для Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Архивы пакетов APT для Debian Linux
+  - name: arch
+    description: Зеркала пакетов pacman для Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Репозитории RPM для Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Зеркала пакетов apk для Alpine Linux
+    aliases: *id026
+- name: reset
+  aliases:
+  - r
+  description: Сбросить к официальному источнику по умолчанию
+  commands:
+  - name: python
+    description: Индекс пакетов Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Установщик пакетов Python pip
+    aliases: *id011
+  - name: uv
+    description: Быстрый менеджер пакетов и проектов Python (Astral uv)
+  - name: poetry
+    description: Управление упаковкой и зависимостями Python
+  - name: pdm
+    description: Современный менеджер пакетов и зависимостей Python
+  - name: rye
+    description: Инструмент управления пакетами Python
+  - name: npm
+    description: Менеджер пакетов Node.js
+  - name: yarn
+    description: Быстрое, надежное и безопасное управление зависимостями
+  - name: pnpm
+    description: Быстрый и эффективный по дисковому пространству менеджер пакетов
+  - name: bun
+    description: Универсальная среда выполнения JavaScript и менеджер пакетов
+  - name: node
+    description: Двоичные дистрибутивы Node.js
+    aliases: *id012
+  - name: nvm
+    description: Менеджер версий Node.js
+  - name: cargo
+    description: Менеджер пакетов Rust и реестр crates.io
+    aliases: *id013
+  - name: rustup
+    description: Установщик и обновлятель инструментария Rust
+  - name: go
+    description: Прокси модулей Go и sumdb
+    aliases: *id014
+  - name: docker
+    description: Зеркало реестра демона Docker
+  - name: brew
+    description: Менеджер пакетов Homebrew (бутылки и git-репозитории)
+    aliases: *id015
+  - name: scoop
+    description: Командный установщик Scoop для Windows
+  - name: winget
+    description: Репозиторий Windows Package Manager
+  - name: conda
+    description: Репозитории пакетов Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Центральный репозиторий Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Репозиторий инструмента сборки Gradle
+  - name: nuget
+    description: Канал пакетов .NET NuGet
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK и pub-пакеты
+  - name: dart
+    description: Репозиторий пакетов Dart pub
+    aliases: *id019
+  - name: ruby
+    description: Репозиторий пакетов RubyGems
+    aliases: *id020
+  - name: composer
+    description: Репозиторий PHP Composer (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Архив пакетов Perl CPAN
+    aliases: *id022
+  - name: ubuntu
+    description: Архивы пакетов APT для Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Архивы пакетов APT для Debian Linux
+  - name: arch
+    description: Зеркала пакетов pacman для Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Репозитории RPM для Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Зеркала пакетов apk для Alpine Linux
+    aliases: *id026
+- name: measure
+  aliases:
+  - m
+  - speed
+  - cesu
+  description: Тестирование скорости и бенчмарк всех доступных источников зеркал
+  commands:
+  - name: python
+    description: Индекс пакетов Python / PyPI
+    aliases: *id010
+  - name: pip
+    description: Установщик пакетов Python pip
+    aliases: *id011
+  - name: uv
+    description: Быстрый менеджер пакетов и проектов Python (Astral uv)
+  - name: poetry
+    description: Управление упаковкой и зависимостями Python
+  - name: pdm
+    description: Современный менеджер пакетов и зависимостей Python
+  - name: rye
+    description: Инструмент управления пакетами Python
+  - name: npm
+    description: Менеджер пакетов Node.js
+  - name: yarn
+    description: Быстрое, надежное и безопасное управление зависимостями
+  - name: pnpm
+    description: Быстрый и эффективный по дисковому пространству менеджер пакетов
+  - name: bun
+    description: Универсальная среда выполнения JavaScript и менеджер пакетов
+  - name: node
+    description: Двоичные дистрибутивы Node.js
+    aliases: *id012
+  - name: nvm
+    description: Менеджер версий Node.js
+  - name: cargo
+    description: Менеджер пакетов Rust и реестр crates.io
+    aliases: *id013
+  - name: rustup
+    description: Установщик и обновлятель инструментария Rust
+  - name: go
+    description: Прокси модулей Go и sumdb
+    aliases: *id014
+  - name: docker
+    description: Зеркало реестра демона Docker
+  - name: brew
+    description: Менеджер пакетов Homebrew (бутылки и git-репозитории)
+    aliases: *id015
+  - name: scoop
+    description: Командный установщик Scoop для Windows
+  - name: winget
+    description: Репозиторий Windows Package Manager
+  - name: conda
+    description: Репозитории пакетов Anaconda / Miniconda
+    aliases: *id016
+  - name: maven
+    description: Центральный репозиторий Apache Maven
+    aliases: *id017
+  - name: gradle
+    description: Репозиторий инструмента сборки Gradle
+  - name: nuget
+    description: Канал пакетов .NET NuGet
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK и pub-пакеты
+  - name: dart
+    description: Репозиторий пакетов Dart pub
+    aliases: *id019
+  - name: ruby
+    description: Репозиторий пакетов RubyGems
+    aliases: *id020
+  - name: composer
+    description: Репозиторий PHP Composer (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Архив пакетов Perl CPAN
+    aliases: *id022
+  - name: ubuntu
+    description: Архивы пакетов APT для Ubuntu Linux
+    aliases: *id023
+  - name: debian
+    description: Архивы пакетов APT для Debian Linux
+  - name: arch
+    description: Зеркала пакетов pacman для Arch Linux
+    aliases: *id024
+  - name: fedora
+    description: Репозитории RPM для Fedora Linux
+    aliases: *id025
+  - name: alpine
+    description: Зеркала пакетов apk для Alpine Linux
+    aliases: *id026
+- name: list
+  aliases:
+  - ls
+  - l
+  description: Список поддерживаемых языков, систем, программного обеспечения или
+    зеркал
+  commands:
+  - name: mirror
+    description: Список всех известных провайдеров зеркал (Tsinghua, Aliyun, USTC
+      и др.)
+  - name: dish
+    description: Список всех поддерживаемых языков программирования и менеджеров пакетов
+  - name: lang
+    description: Список поддерживаемых блюд языков программирования
+  - name: os
+    description: Список поддерживаемых блюд дистрибутивов операционных систем
+  - name: ware
+    description: Список поддерживаемых блюд программного обеспечения и менеджеров
+      пакетов
+- name: doctor
+  description: Диагностика установки chsrc, системного PATH и сетевого подключения

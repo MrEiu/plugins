@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (日本語)
+name: alias
+description: 跨平台命令别名映射与超现代CLI工具管理
+standalone: false
+flags:
+  -h, --help: 显示帮助信息
+commands:
+- name: list
+  aliases:
+  - ls
+  description: 显示已注册的别名映射及超现代工具状态
+  flags:
+    -p, --platform=: 按目标Shell平台筛选映射
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: add
+  description: 添加或更新命令别名映射（默认为当前平台）
+  flags:
+    -p, --platform=: 目标Shell平台（默认为当前活动Shell）
+    -d, --desc=: 别名的可读描述
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: remove
+  aliases:
+  - rm
+  - delete
+  description: 移除别名或特定平台模板
+  flags:
+    -p, --platform=: 仅移除指定平台模板
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: test
+  description: 预览跨Shell平台的命令转换而不执行
+- name: reset
+  description: 将所有映射重置为36+ Linux优先的基线默认值
+  flags:
+    --hard: 完全覆盖所有自定义别名
+- name: ultra
+  description: 一键安装现代高性能CLI工具（eza、bat、rg、fd、procs、dust等）
+  flags:
+    -n, --dry-run: 模拟安装而不更改系统
+    --force: 强制重新安装所有超现代工具

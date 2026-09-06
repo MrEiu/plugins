@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Français)
+name: portal
+description: Téléportation intelligente de répertoires et navigation dans l'espace
+  de travail (propulsé par zoxide)
+standalone: true
+flags:
+  -h, --help: Afficher l'aide
+commands:
+- name: ls
+  aliases:
+  - list
+  description: Lister les répertoires classés et les scores de fréquence
+  flags:
+    -s, --score: Afficher le score avec les résultats
+- name: add
+  aliases:
+  - +
+  description: 'Ajouter un répertoire à la base de données (défaut : répertoire courant)'
+- name: rm
+  aliases:
+  - remove
+  - '-'
+  description: Supprimer un répertoire de la base de données
+- name: query
+  description: Rechercher un répertoire dans la base de données
+- name: open
+  aliases:
+  - explore
+  description: Ouvrir le répertoire dans l'Explorateur de fichiers natif
+- name: doctor
+  description: Diagnostiquer l'installation et l'environnement de zoxide
+- name: edit
+  description: Modifier directement la base de données de zoxide
+- name: init
+  description: Générer la configuration du hook shell externe

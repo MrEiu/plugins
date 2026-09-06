@@ -107,7 +107,7 @@ class InitPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="init",
         name="Init",
-        version="0.1.0",
+        version="0.1.1",
         description="Project development environment and tool runtime initializer powered by mise.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-init",

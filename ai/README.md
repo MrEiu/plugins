@@ -1,96 +1,94 @@
-# AI Plugin for Kapsel
+# AI Copilot Plugin for Kapsel
 
-Terminal AI assistant plugin for the **Kapsel** shell, powered by [aichat](https://github.com/sigoden/aichat).
+Native terminal AI assistant plugin for the **Kapsel** shell, powered directly by the official [OpenAI Python SDK](https://github.com/openai/openai-python).
 
-The plugin provides instant single-turn natural language queries, shell command generation and execution (`-e`), code generation (`-c`), and a user-friendly interactive setup wizard (`kps ai init`) that configures modern LLM providers (OpenAI, Gemini, Claude, DeepSeek, Ollama, SiliconFlow, and custom endpoints) effortlessly.
-
-> **Design Note**:
-> Bare `kps ai` displays an informative help and syntax guide with prompt examples instead of dropping you into an interactive REPL session, keeping your terminal responsive and workflow focused.
+Zero external binaries, lightning-fast streaming, and purpose-built for developer workflows directly inside your terminal.
 
 ---
 
-## Installation
+## Features
 
-Add and enable the plugin via Kapsel system command:
-
-```bash
-kapsel add ai
-```
-
-*(Automatically installs `aichat` via Scoop, Winget, Homebrew, or binary download if not already present on your system).*
+- **`kps ai <prompt>` / `kps ai do <prompt>`**: Natural language to shell command generation with 1-click interactive execution (`[Enter]` run, `[Tab/e]` copy to clipboard, `[Esc/q]` cancel).
+- **`kps ai fix` / `kps ai ?`**: Auto-diagnoses the last failed command from Kapsel's `BlockRegistry` (analyzing command, exit code, and error output) and suggests a 1-click auto-repair.
+- **`kps ai commit`**: Inspects `git diff` / staged changes, generates Conventional Commits messages, and prompts for 1-click `git commit -m`.
+- **`kps ai explain [cmd]`**: Step-by-step breakdown of shell commands, parameters, and flags.
+- **`<cmd> | kps ai [prompt]`**: Real-time terminal pipeline stream processor.
+- **`kps ai scout`**: Workspace reconnaissance analyzing project manifests (`package.json`, `Cargo.toml`, `pyproject.toml`, etc.) to brief tech stack, architecture, and run commands.
+- **`kps ai init`**: Interactive guided configuration wizard supporting DeepSeek, SiliconFlow, Ollama, Gemini, OpenAI, and custom endpoints.
+- **`kps ai config [status|test|model <name>|edit]`**: Inspect, test connectivity, switch active models, or edit configuration.
 
 ---
 
 ## Quick Setup (`kps ai init`)
 
-Run Kapsel's guided interactive setup wizard to configure your preferred LLM provider and API key in seconds:
+Run the setup wizard to connect your preferred provider:
 
 ```bash
 kps ai init
 ```
 
-The wizard guides you through:
-1. **Model Provider Selection**:
-   - `1` - OpenAI (`gpt-4o`, `gpt-4o-mini`, `o3-mini`, `o1`)
-   - `2` - Google Gemini (`gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro`, `gemini-1.5-flash`)
-   - `3` - Anthropic Claude (`claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`)
-   - `4` - DeepSeek (`deepseek-chat` / `deepseek-reasoner`)
-   - `5` - Ollama (Local LLM, no API key required, e.g. `deepseek-r1`, `llama3.3`, `qwen2.5-coder`)
-   - `6` - SiliconFlow (Fast Chinese domestic API gateway, `DeepSeek-V3`, `DeepSeek-R1`, `Qwen2.5`)
-   - `7` - Custom OpenAI-compatible API (OneAPI, NewAPI, vLLM, FastChat)
-2. **API Key & Endpoint Configuration**: Safe input prompts for your credentials and custom URLs.
-3. **Model Selection & Connection Test**: Automatically saves configuration isolated under Kapsel's data directory (`$KAPSEL_DATA_DIR/ai/config.yaml`) and verifies network connectivity.
+Supported providers:
+1. **DeepSeek** (Official API: `deepseek-chat`, `deepseek-reasoner`)
+2. **SiliconFlow / 硅基流动** (`DeepSeek-V3`, `DeepSeek-R1`, `Qwen2.5-72B`)
+3. **Ollama** (Local offline LLM, no API key needed: `deepseek-r1`, `llama3.3`, `qwen2.5-coder`)
+4. **Google Gemini** (Official OpenAI-compatible endpoint: `gemini-2.0-flash`, `gemini-1.5-pro`)
+5. **OpenAI** (Official API: `gpt-4o`, `gpt-4o-mini`, `o3-mini`)
+6. **Custom Endpoint** (OneAPI, NewAPI, vLLM, FastChat, etc.)
 
 ---
 
-## Usage
+## Usage Examples
 
-### 1. Direct Question / Prompt (`kps ai <prompt...>`)
-
-Ask questions, request summaries, or explain concepts directly in your terminal:
-
+### 1. Natural Language Command Copilot
 ```bash
-kps ai "Explain how Docker container networking works"
-kps ai "What is the difference between TCP and UDP?"
-kps ai "Write a regular expression matching ISO 8601 timestamps"
+kps ai list all docker containers created today
+kps ai do kill process on port 8080
+```
+Outputs the exact command for your OS/shell and prompts:
+- Press `[Enter]` to execute immediately
+- Press `[Tab]` or `[e]` to copy to clipboard for editing
+- Press `[Esc]` or `[q]` to cancel
+
+### 2. Auto-Fix Last Failed Command
+```bash
+# A command failed with non-zero exit code
+kps ai fix
+# or simply:
+kps ai ?
 ```
 
-### 2. Natural Language Shell Command Execution (`kps ai -e <prompt...>`)
-
-Generate executable terminal commands from plain English descriptions and optionally execute them directly:
-
+### 3. Git Diff to Conventional Commit
 ```bash
-kps ai -e "find all .log files modified in the last 7 days and sort by size"
-kps ai -e "kill all processes listening on port 8080"
-kps ai -e "compress the src directory into a tar.gz archive"
+git add .
+kps ai commit
 ```
 
-### 3. Code-Only Output (`kps ai -c <prompt...>`)
-
-Generate pure code without conversational text or markdown explanation, ideal for piping into files or tools:
-
+### 4. Command Dissection
 ```bash
-kps ai -c "python script to fetch title and headers from a web page"
-kps ai -c "bash function to check if a command exists in PATH"
+kps ai explain tar -czvf archive.tar.gz ./src
 ```
 
-### 4. Configuration Management (`kps ai config`)
-
-Inspect, test, or open the configuration file:
-
+### 5. Workspace Reconnaissance
 ```bash
-kps ai config status   # Check configured model, provider, and config path
-kps ai config test     # Send a ping test to verify LLM API connectivity
-kps ai config edit     # Open config.yaml in your system's default editor
+kps ai scout
+```
+
+### 6. Pipeline Stream Processing
+```bash
+cat build.log | kps ai summarize errors and warnings
 ```
 
 ---
 
-## Configuration Details
+## Configuration
 
-The plugin keeps its configuration cleanly isolated in the Kapsel workspace/data directory:
-- Config path: `$KAPSEL_DATA_DIR/ai/config.yaml`
-- Automatically mirrors to standard system paths (`%APPDATA%\aichat\config.yaml` on Windows or `~/.config/aichat/config.yaml` on Linux/macOS) for maximum interoperability with standalone `aichat` invocations.
+Configuration is saved in `~/.kapsel/ai/config.yaml`:
+```bash
+kps ai config status        # View active provider and model
+kps ai config test          # Test API connectivity
+kps ai config model gpt-4o  # Switch active model instantly
+kps ai config edit          # Edit YAML file in system editor
+```
 
 ---
 

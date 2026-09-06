@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Русский)
+name: init
+description: Инициализатор среды разработки проекта и рантаймов инструментов (на базе
+  mise)
+standalone: false
+flags:
+  -h, --help: Показать справочную информацию
+commands:
+- name: use
+  description: Зафиксировать и установить рантайм инструмента в проекте (например,
+    use node@22)
+- name: ls
+  aliases:
+  - list
+  description: Список установленных и активных рантаймов инструментов
+- name: current
+  description: Показать активные версии рантаймов в текущем каталоге
+- name: doctor
+  description: Диагностика окружения mise и состояния PATH
+- name: upgrade
+  description: Обновить устаревшие рантаймы инструментов в текущем проекте
+- name: run
+  description: Выполнить задачу проекта, определённую в mise.toml

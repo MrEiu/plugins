@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-ai"
-version = "0.1.0"
-description = "Terminal AI assistant plugin for Kapsel shell powered by aichat with guided setup wizard."
+version = "0.1.2"
+description = "Native terminal AI assistant plugin for Kapsel powered by OpenAI Python SDK with guided setup wizard."
 authors = [{ name = "Kapsel Team" }]
 license = { text = "MIT" }
-dependencies = ["pyyaml"]
-keywords = ["kapsel", "plugin", "ai", "llm", "aichat", "deepseek", "openai", "cli"]
+dependencies = [
+    "pyyaml",
+    "openai>=1.0.0",
+]
+keywords = ["kapsel", "plugin", "ai", "llm", "copilot", "deepseek", "openai", "cli"]
 
 [project.urls]
 Homepage = "https://github.com/MrEiu/plugins/tree/master/ai"

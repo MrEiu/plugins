@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Español)
+name: portal
+description: Teletransporte inteligente de directorios y navegación de espacios de
+  trabajo (impulsado por zoxide)
+standalone: true
+flags:
+  -h, --help: Mostrar información de ayuda
+commands:
+- name: ls
+  aliases:
+  - list
+  description: Listar directorios clasificados y puntuaciones de frecencia
+  flags:
+    -s, --score: Imprimir puntuación con resultados
+- name: add
+  aliases:
+  - +
+  description: 'Agregar directorio a la base de datos (predeterminado: cwd)'
+- name: rm
+  aliases:
+  - remove
+  - '-'
+  description: Eliminar directorio de la base de datos
+- name: query
+  description: Buscar un directorio en la base de datos
+- name: open
+  aliases:
+  - explore
+  description: Abrir directorio en el Explorador de archivos nativo
+- name: doctor
+  description: Diagnosticar la instalación de zoxide y el entorno
+- name: edit
+  description: Editar directamente la base de datos de zoxide
+- name: init
+  description: Generar configuración de enlace de shell externo

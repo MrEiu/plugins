@@ -70,6 +70,10 @@ def get_platform_templates() -> Dict[str, List[str]]:
 MANAGER_BINARIES: Dict[str, tuple[str, ...]] = get_manager_binaries()
 PLATFORM_PRIORITY_TEMPLATES: Dict[str, List[str]] = get_platform_templates()
 
+# Set of manager IDs known not to be supported as CLI flags by MPM
+UNSUPPORTED_MPM_SELECTORS: set = {"go", "dotnet"}
+MPM_SUPPORTED_SELECTORS: set = set(MANAGER_BINARIES.keys()) - UNSUPPORTED_MPM_SELECTORS
+
 
 def _get_current_platform_key() -> str:
     """Identifies the current platform / Linux distribution family."""
@@ -174,7 +178,16 @@ def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = 
         con.print("    [bold #a855f7]pip install meta-package-manager[/]  (Python pip)\n")
         return 1
 
-    cmd = mpm_exec + [subcmd] + args
+    # MPM requires manager selector options (--<manager>, --no-<manager>) before the subcommand
+    global_flags: List[str] = []
+    subcmd_args: List[str] = []
+    for a in args:
+        if (a.startswith("--") and (a[2:] in MANAGER_BINARIES or a.startswith("--no-"))) or a in ("--dry-run",):
+            global_flags.append(a)
+        else:
+            subcmd_args.append(a)
+
+    cmd = mpm_exec + global_flags + [subcmd] + subcmd_args
     try:
         # Stream process execution interactively to the terminal
         result = subprocess.run(cmd)
@@ -380,7 +393,8 @@ class InstallPlugin(KapselPlugin):
             return args
 
         # Prepend ordered manager selection flags (e.g. ['--winget', '--scoop'])
-        ordered_flags = [f"--{m}" for m in active]
+        # Only inject flags for managers actually supported as CLI selectors by MPM
+        ordered_flags = [f"--{m}" for m in active if m in MPM_SUPPORTED_SELECTORS]
         return ordered_flags + args
 
     # --------------------------------------------------------------------------

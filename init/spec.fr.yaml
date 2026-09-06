@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Français)
+name: init
+description: Initialiseur d'environnement de développement et d'exécution d'outils
+  pour projet (propulsé par mise)
+standalone: false
+flags:
+  -h, --help: Afficher l'aide
+commands:
+- name: use
+  description: Épingler et installer un runtime d'outil dans le projet (ex. use node@22)
+- name: ls
+  aliases:
+  - list
+  description: Lister les runtimes d'outils installés et actifs
+- name: current
+  description: Afficher les versions de runtime actives dans le répertoire courant
+- name: doctor
+  description: Diagnostiquer l'environnement mise et la santé du PATH
+- name: upgrade
+  description: Mettre à niveau les runtimes d'outils obsolètes dans le projet courant
+- name: run
+  description: Exécuter une tâche de projet définie dans mise.toml

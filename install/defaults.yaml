@@ -104,8 +104,8 @@ managers:
 # ------------------------------------------------------------------------------
 platforms:
   windows:
-    - winget
     - scoop
+    - winget
     - choco
     - vcpkg
     - uv

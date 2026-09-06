@@ -1,0 +1,749 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (日本語)
+name: shore
+description: 快速智能镜像源切换器（由chsrc驱动）
+standalone: true
+flags:
+  -h, --help: 显示帮助信息
+  -v, --version: 显示版本
+commands:
+- name: set
+  aliases:
+  - s
+  description: 自动基准测试并切换到最快的镜像源
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: &id010
+    - py
+    commands:
+    - &id001
+      name: first
+      description: 由上游维护者基准测试的最快镜像
+    - &id002
+      name: tuna
+      description: 清华大学开源镜像站（TUNA）
+    - &id003
+      name: aliyun
+      description: 阿里云开源镜像站
+    - &id004
+      name: ustc
+      description: 中国科学技术大学开源镜像站（USTC）
+    - &id005
+      name: tencent
+      description: 腾讯云公共镜像
+    - &id006
+      name: huawei
+      description: 华为云开源镜像站
+    - &id007
+      name: '163'
+      description: 网易开源镜像站
+    - &id008
+      name: bfsu
+      description: 北京外国语大学镜像站
+    - &id009
+      name: sjtu
+      description: 上海交通大学镜像站
+  - name: pip
+    description: Python pip パッケージインストーラー
+    aliases: &id011
+    - pip3
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: uv
+    description: 高速な Python パッケージ・プロジェクトマネージャー (Astral uv)
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: poetry
+    description: Python のパッケージングと依存関係管理
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pdm
+    description: モダンな Python パッケージ・依存関係マネージャー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rye
+    description: Python パッケージ管理ツール
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: npm
+    description: Node.js パッケージマネージャー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: yarn
+    description: 高速で信頼性が高く安全な依存関係管理
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: pnpm
+    description: 高速でディスク容量を節約するパッケージマネージャー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: bun
+    description: オールインワンの JavaScript ランタイム兼パッケージマネージャー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: node
+    description: Node.js バイナリ配布
+    aliases: &id012
+    - nodejs
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nvm
+    description: Node バージョンマネージャー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cargo
+    description: Rust パッケージマネージャーおよび crates.io レジストリ
+    aliases: &id013
+    - rust
+    - crates
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: rustup
+    description: Rust ツールチェーンインストーラー兼アップデーター
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: go
+    description: Go モジュールプロキシと sumdb
+    aliases: &id014
+    - golang
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: docker
+    description: Docker デーモンレジストリミラー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: brew
+    description: Homebrew パッケージマネージャー (ボトルと git リポジトリ)
+    aliases: &id015
+    - homebrew
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: scoop
+    description: Windows 向け Scoop コマンドラインインストーラー
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: winget
+    description: Windows パッケージマネージャーリポジトリ
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: conda
+    description: Anaconda / Miniconda パッケージリポジトリ
+    aliases: &id016
+    - anaconda
+    - miniconda
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: maven
+    description: Apache Maven 中央リポジトリ
+    aliases: &id017
+    - mvn
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: gradle
+    description: Gradle ビルドツールリポジトリ
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: nuget
+    description: .NET NuGet パッケージフィード
+    aliases: &id018
+    - .net
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: flutter
+    description: Flutter SDK と pub パッケージ
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: dart
+    description: Dart pub パッケージリポジトリ
+    aliases: &id019
+    - pub
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ruby
+    description: RubyGems パッケージリポジトリ
+    aliases: &id020
+    - gem
+    - rubygems
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: composer
+    description: PHP Composer リポジトリ (Packagist)
+    aliases: &id021
+    - php
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: cpan
+    description: Perl CPAN パッケージアーカイブ
+    aliases: &id022
+    - perl
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: ubuntu
+    description: Ubuntu Linux APT パッケージアーカイブ
+    aliases: &id023
+    - apt
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: debian
+    description: Debian Linux APT パッケージアーカイブ
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: arch
+    description: Arch Linux pacman パッケージミラー
+    aliases: &id024
+    - pacman
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: fedora
+    description: Fedora Linux RPM リポジトリ
+    aliases: &id025
+    - dnf
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+  - name: alpine
+    description: Alpine Linux apk パッケージミラー
+    aliases: &id026
+    - apk
+    commands:
+    - *id001
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - *id006
+    - *id007
+    - *id008
+    - *id009
+- name: get
+  aliases:
+  - g
+  description: 現在アクティブなミラーソース設定を表示
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip パッケージインストーラー
+    aliases: *id011
+  - name: uv
+    description: 高速な Python パッケージ・プロジェクトマネージャー (Astral uv)
+  - name: poetry
+    description: Python のパッケージングと依存関係管理
+  - name: pdm
+    description: モダンな Python パッケージ・依存関係マネージャー
+  - name: rye
+    description: Python パッケージ管理ツール
+  - name: npm
+    description: Node.js パッケージマネージャー
+  - name: yarn
+    description: 高速で信頼性が高く安全な依存関係管理
+  - name: pnpm
+    description: 高速でディスク容量を節約するパッケージマネージャー
+  - name: bun
+    description: オールインワンの JavaScript ランタイム兼パッケージマネージャー
+  - name: node
+    description: Node.js バイナリ配布
+    aliases: *id012
+  - name: nvm
+    description: Node バージョンマネージャー
+  - name: cargo
+    description: Rust パッケージマネージャーおよび crates.io レジストリ
+    aliases: *id013
+  - name: rustup
+    description: Rust ツールチェーンインストーラー兼アップデーター
+  - name: go
+    description: Go モジュールプロキシと sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker デーモンレジストリミラー
+  - name: brew
+    description: Homebrew パッケージマネージャー (ボトルと git リポジトリ)
+    aliases: *id015
+  - name: scoop
+    description: Windows 向け Scoop コマンドラインインストーラー
+  - name: winget
+    description: Windows パッケージマネージャーリポジトリ
+  - name: conda
+    description: Anaconda / Miniconda パッケージリポジトリ
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央リポジトリ
+    aliases: *id017
+  - name: gradle
+    description: Gradle ビルドツールリポジトリ
+  - name: nuget
+    description: .NET NuGet パッケージフィード
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK と pub パッケージ
+  - name: dart
+    description: Dart pub パッケージリポジトリ
+    aliases: *id019
+  - name: ruby
+    description: RubyGems パッケージリポジトリ
+    aliases: *id020
+  - name: composer
+    description: PHP Composer リポジトリ (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN パッケージアーカイブ
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT パッケージアーカイブ
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT パッケージアーカイブ
+  - name: arch
+    description: Arch Linux pacman パッケージミラー
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM リポジトリ
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk パッケージミラー
+    aliases: *id026
+- name: reset
+  aliases:
+  - r
+  description: 公式のデフォルトアップストリームソースにリセット
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip パッケージインストーラー
+    aliases: *id011
+  - name: uv
+    description: 高速な Python パッケージ・プロジェクトマネージャー (Astral uv)
+  - name: poetry
+    description: Python のパッケージングと依存関係管理
+  - name: pdm
+    description: モダンな Python パッケージ・依存関係マネージャー
+  - name: rye
+    description: Python パッケージ管理ツール
+  - name: npm
+    description: Node.js パッケージマネージャー
+  - name: yarn
+    description: 高速で信頼性が高く安全な依存関係管理
+  - name: pnpm
+    description: 高速でディスク容量を節約するパッケージマネージャー
+  - name: bun
+    description: オールインワンの JavaScript ランタイム兼パッケージマネージャー
+  - name: node
+    description: Node.js バイナリ配布
+    aliases: *id012
+  - name: nvm
+    description: Node バージョンマネージャー
+  - name: cargo
+    description: Rust パッケージマネージャーおよび crates.io レジストリ
+    aliases: *id013
+  - name: rustup
+    description: Rust ツールチェーンインストーラー兼アップデーター
+  - name: go
+    description: Go モジュールプロキシと sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker デーモンレジストリミラー
+  - name: brew
+    description: Homebrew パッケージマネージャー (ボトルと git リポジトリ)
+    aliases: *id015
+  - name: scoop
+    description: Windows 向け Scoop コマンドラインインストーラー
+  - name: winget
+    description: Windows パッケージマネージャーリポジトリ
+  - name: conda
+    description: Anaconda / Miniconda パッケージリポジトリ
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央リポジトリ
+    aliases: *id017
+  - name: gradle
+    description: Gradle ビルドツールリポジトリ
+  - name: nuget
+    description: .NET NuGet パッケージフィード
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK と pub パッケージ
+  - name: dart
+    description: Dart pub パッケージリポジトリ
+    aliases: *id019
+  - name: ruby
+    description: RubyGems パッケージリポジトリ
+    aliases: *id020
+  - name: composer
+    description: PHP Composer リポジトリ (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN パッケージアーカイブ
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT パッケージアーカイブ
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT パッケージアーカイブ
+  - name: arch
+    description: Arch Linux pacman パッケージミラー
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM リポジトリ
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk パッケージミラー
+    aliases: *id026
+- name: measure
+  aliases:
+  - m
+  - speed
+  - cesu
+  description: 利用可能なすべてのミラーソースをスピードテストおよびベンチマーク
+  commands:
+  - name: python
+    description: Python / PyPI包索引
+    aliases: *id010
+  - name: pip
+    description: Python pip パッケージインストーラー
+    aliases: *id011
+  - name: uv
+    description: 高速な Python パッケージ・プロジェクトマネージャー (Astral uv)
+  - name: poetry
+    description: Python のパッケージングと依存関係管理
+  - name: pdm
+    description: モダンな Python パッケージ・依存関係マネージャー
+  - name: rye
+    description: Python パッケージ管理ツール
+  - name: npm
+    description: Node.js パッケージマネージャー
+  - name: yarn
+    description: 高速で信頼性が高く安全な依存関係管理
+  - name: pnpm
+    description: 高速でディスク容量を節約するパッケージマネージャー
+  - name: bun
+    description: オールインワンの JavaScript ランタイム兼パッケージマネージャー
+  - name: node
+    description: Node.js バイナリ配布
+    aliases: *id012
+  - name: nvm
+    description: Node バージョンマネージャー
+  - name: cargo
+    description: Rust パッケージマネージャーおよび crates.io レジストリ
+    aliases: *id013
+  - name: rustup
+    description: Rust ツールチェーンインストーラー兼アップデーター
+  - name: go
+    description: Go モジュールプロキシと sumdb
+    aliases: *id014
+  - name: docker
+    description: Docker デーモンレジストリミラー
+  - name: brew
+    description: Homebrew パッケージマネージャー (ボトルと git リポジトリ)
+    aliases: *id015
+  - name: scoop
+    description: Windows 向け Scoop コマンドラインインストーラー
+  - name: winget
+    description: Windows パッケージマネージャーリポジトリ
+  - name: conda
+    description: Anaconda / Miniconda パッケージリポジトリ
+    aliases: *id016
+  - name: maven
+    description: Apache Maven 中央リポジトリ
+    aliases: *id017
+  - name: gradle
+    description: Gradle ビルドツールリポジトリ
+  - name: nuget
+    description: .NET NuGet パッケージフィード
+    aliases: *id018
+  - name: flutter
+    description: Flutter SDK と pub パッケージ
+  - name: dart
+    description: Dart pub パッケージリポジトリ
+    aliases: *id019
+  - name: ruby
+    description: RubyGems パッケージリポジトリ
+    aliases: *id020
+  - name: composer
+    description: PHP Composer リポジトリ (Packagist)
+    aliases: *id021
+  - name: cpan
+    description: Perl CPAN パッケージアーカイブ
+    aliases: *id022
+  - name: ubuntu
+    description: Ubuntu Linux APT パッケージアーカイブ
+    aliases: *id023
+  - name: debian
+    description: Debian Linux APT パッケージアーカイブ
+  - name: arch
+    description: Arch Linux pacman パッケージミラー
+    aliases: *id024
+  - name: fedora
+    description: Fedora Linux RPM リポジトリ
+    aliases: *id025
+  - name: alpine
+    description: Alpine Linux apk パッケージミラー
+    aliases: *id026
+- name: list
+  aliases:
+  - ls
+  - l
+  description: サポートされている言語、システム、ソフトウェア、またはミラーを一覧表示
+  commands:
+  - name: mirror
+    description: 既知のすべてのミラープロバイダーを一覧表示 (清华、阿里云、中科大など)
+  - name: dish
+    description: サポートされているすべてのプログラミング言語とパッケージマネージャーを一覧表示
+  - name: lang
+    description: サポートされているプログラミング言語のディッシュを一覧表示
+  - name: os
+    description: サポートされている OS ディストリビューションのディッシュを一覧表示
+  - name: ware
+    description: サポートされているソフトウェアとパッケージマネージャーのディッシュを一覧表示
+- name: doctor
+  description: chsrc のインストール、システム PATH、ネットワーク接続を診断

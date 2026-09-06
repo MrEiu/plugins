@@ -90,7 +90,7 @@ class PortalPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="portal",
         name="Portal",
-        version="0.1.0",
+        version="0.1.2",
         description="Smart directory teleportation and workspace navigator powered by zoxide.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/portal",
@@ -217,8 +217,16 @@ class PortalPlugin(KapselPlugin):
         if not self._zoxide_bin:
             return []
 
-        partial = stripped[len(matched_prefix):].strip()
-        entries = self._list_zoxide_entries(partial)
+        remainder = stripped[len(matched_prefix):]
+        if remainder.endswith(" ") or not remainder:
+            start_pos = 0
+            query = ""
+        else:
+            curr_token = remainder.split()[-1]
+            start_pos = -len(curr_token)
+            query = remainder.strip()
+
+        entries = self._list_zoxide_entries(query)
 
         candidates = []
         for path_str in entries[:15]:
@@ -228,6 +236,7 @@ class PortalPlugin(KapselPlugin):
                 "text": basename,
                 "display": f"{basename}  [dim]({path_str})[/]",
                 "display_meta": "[portal]",
+                "start_position": start_pos,
             })
         return candidates
 

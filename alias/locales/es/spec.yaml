@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Español)
+name: alias
+description: Gestión multiplataforma de alias de comandos y herramientas CLI ultramodernas
+standalone: false
+flags:
+  -h, --help: Mostrar información de ayuda
+commands:
+- name: list
+  aliases:
+  - ls
+  description: Mostrar asignaciones de alias registradas y estado de herramientas
+    ultramodernas
+  flags:
+    -p, --platform=: Filtrar asignaciones por plataforma de shell de destino
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: add
+  description: Agregar o actualizar una asignación de alias de comando (plataforma
+    actual por defecto)
+  flags:
+    -p, --platform=: Plataforma de shell de destino (shell activo por defecto)
+    -d, --desc=: Descripción legible para el alias
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: remove
+  aliases:
+  - rm
+  - delete
+  description: Eliminar un alias o plantilla de plataforma específica
+  flags:
+    -p, --platform=: Eliminar solo la plantilla de plataforma especificada
+  completion:
+    flag:
+      platform:
+      - "universal\tAll platforms"
+      - "pwsh\tPowerShell 7+"
+      - "cmd\tWindows CMD"
+      - "bash\tGNU Bash"
+      - "zsh\tZ Shell"
+      - "powershell\tWindows PowerShell"
+- name: test
+  description: Vista previa de la traducción de comandos entre plataformas de shell
+    sin ejecutar
+- name: reset
+  description: Restablecer todas las asignaciones a los valores predeterminados de
+    referencia Linux-First (36+)
+  flags:
+    --hard: Sobrescribir completamente todos los alias personalizados
+- name: ultra
+  description: Instalación con un clic de herramientas CLI modernas de alto rendimiento
+    (eza, bat, rg, fd, procs, dust, etc.)
+  flags:
+    -n, --dry-run: Simular la instalación sin realizar cambios en el sistema
+    --force: Forzar la reinstalación de todas las herramientas ultramodernas

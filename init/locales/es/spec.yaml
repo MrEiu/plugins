@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+# Kapsel Carapace Completion Spec (Español)
+name: init
+description: Inicializador de entorno de desarrollo de proyectos y tiempo de ejecución
+  de herramientas (impulsado por mise)
+standalone: false
+flags:
+  -h, --help: Mostrar información de ayuda
+commands:
+- name: use
+  description: Fijar e instalar un tiempo de ejecución de herramienta en el proyecto
+    (p. ej., use node@22)
+- name: ls
+  aliases:
+  - list
+  description: Listar tiempos de ejecución de herramientas instalados y activos
+- name: current
+  description: Mostrar versiones de tiempo de ejecución activas en el directorio actual
+- name: doctor
+  description: Diagnosticar el entorno de mise y la salud de PATH
+- name: upgrade
+  description: Actualizar tiempos de ejecución de herramientas obsoletos en el proyecto
+    actual
+- name: run
+  description: Ejecutar tarea de proyecto definida en mise.toml

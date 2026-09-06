@@ -119,26 +119,17 @@ class HelpPlugin(KapselPlugin):
         """
         con = console or Console(legacy_windows=False)
 
-        # If bare 'kapsel help' or 'kps help' without arguments, display unified Kapsel manual
-        if not args:
-            from kapsel.completion.kps.builtins.help import handle_help as handle_system_help
-            return handle_system_help([], con)
-
-        if len(args) == 1:
-            from kapsel.completion.kps.builtins.help import HelpRenderer
-            renderer = HelpRenderer(con)
-            if renderer.render_topic(args[0]):
-                return 0
-
-        if args in (["-h"], ["--help"]):
+        # If bare 'kps help' or with -h/--help, display cheat sheet lookup guide
+        if not args or args in (["-h"], ["--help"]):
             con.print("\n[bold #00f0ff]📖 Kapsel Help Plugin (Fast Command Cheat Sheets)[/]")
             con.print("[dim]Powered by 'tealdeer' (https://github.com/tealdeer-rs/tealdeer)[/]\n")
             con.print("[bold white]Usage:[/]")
-            con.print("  [bold #a855f7]kps help <command...>[/]       Lookup cheat sheet for a command (e.g. 'kps help tar', 'kps help git commit')")
-            con.print("  [bold #a855f7]kps help --update / -u[/]      Update local tldr page cache from GitHub")
+            con.print("  [bold #a855f7]kps help <command...>[/]       Lookup practical cheat sheet for a CLI command (e.g. 'kps help tar', 'kps help curl')")
+            con.print("  [bold #a855f7]kps help --update / -u[/]      Update local tldr page cache from upstream")
             con.print("  [bold #a855f7]kps help --list / -l[/]        List all available command pages in cache")
             con.print("  [bold #a855f7]kps help -p <os> <cmd>[/]      Specify operating system (linux, macos, windows, common)")
             con.print("  [bold #a855f7]kps help --raw <cmd>[/]         Display raw markdown content without rendering\n")
+            con.print("[dim]💡 Looking for Kapsel system platform manual? Run:[/] [bold #00f0ff]kapsel help[/]\n")
             return 0
 
         # Execute tealdeer with all forwarded arguments
