@@ -90,7 +90,7 @@ class PortalPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="portal",
         name="Portal",
-        version="0.1.3",
+        version="0.1.4",
         description="Smart directory teleportation and directory-bound initialization hook (.portal) powered by zoxide.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/portal",
@@ -235,7 +235,9 @@ class PortalPlugin(KapselPlugin):
             hook_actions = [
                 ("status", "Show .portal hook status in current directory"),
                 ("init", "Create a .portal template file in current directory"),
-                ("edit", "Open .portal in external editor"),
+                ("add", "Append command(s) directly into .portal"),
+                ("paste", "Paste and write multiple commands into .portal"),
+                ("edit", "Open .portal in nano/terminal editor"),
                 ("run", "Execute .portal commands immediately"),
                 ("rm", "Delete .portal file from current directory"),
             ]
@@ -633,23 +635,59 @@ class PortalPlugin(KapselPlugin):
             con.print("[dim]Run 'kps portal hook edit' to customize initialization commands.[/]\n")
             return 0
 
+        elif action in ("add", "append", "+"):
+            if len(args) < 2:
+                con.print("[yellow]Usage:[/] [bold #00f0ff]kps portal hook add <command>[/]")
+                con.print("[dim]Example: kps portal hook add git status -s[/]\n")
+                return 1
+
+            new_cmd = " ".join(args[1:]).strip()
+            if not hook_path.exists():
+                template = (
+                    "# .portal - Directory Auto-Run Hook\n"
+                    "# Commands in this file are executed sequentially whenever you enter this directory.\n"
+                    "# Lines starting with '#' are ignored.\n\n"
+                )
+                hook_path.write_text(template + new_cmd + "\n", encoding="utf-8")
+            else:
+                existing = hook_path.read_text(encoding="utf-8", errors="replace")
+                if existing and not existing.endswith("\n"):
+                    existing += "\n"
+                hook_path.write_text(existing + new_cmd + "\n", encoding="utf-8")
+
+            con.print(f"[bold #10b981]✔ Added command to .portal:[/] [white]{new_cmd}[/]\n")
+            return 0
+
+        elif action in ("paste", "set", "write"):
+            con.print("\n[bold #00f0ff]📋 Paste / Type commands for .portal[/] [dim](Press Enter on empty line or Ctrl+Z/Ctrl+D to save):[/]")
+            input_lines: List[str] = []
+            try:
+                while True:
+                    line = input("  ❯ ")
+                    if not line.strip() and input_lines:
+                        break
+                    if line.strip():
+                        input_lines.append(line.strip())
+            except (EOFError, KeyboardInterrupt):
+                pass
+
+            if not input_lines:
+                con.print("[dim]No commands entered. Operation cancelled.[/]\n")
+                return 0
+
+            header = (
+                "# .portal - Directory Auto-Run Hook\n"
+                "# Commands in this file are executed sequentially whenever you enter this directory.\n\n"
+            )
+            hook_path.write_text(header + "\n".join(input_lines) + "\n", encoding="utf-8")
+            con.print(f"[bold #10b981]✔ Saved {len(input_lines)} command(s) to:[/] [bold #00f0ff]{hook_path}[/]\n")
+            return 0
+
         elif action in ("edit", "open"):
             if not hook_path.exists():
                 self._handle_hook(["init"], con)
 
-            con.print(f"[dim]Opening .portal in editor:[/] [bold #00f0ff]{hook_path}[/]")
-            try:
-                if sys.platform == "win32":
-                    os.startfile(str(hook_path))
-                elif sys.platform == "darwin":
-                    subprocess.run(["open", str(hook_path)])
-                else:
-                    subprocess.run(["xdg-open", str(hook_path)])
-                con.print("[bold #10b981]✔ Opened in editor[/]\n")
-                return 0
-            except Exception as e:
-                con.print(f"[bold #f43f5e]Failed to open editor: {e}[/]")
-                return 1
+            return self._open_editor(hook_path, con)
 
         elif action in ("run", "exec"):
             if not hook_path.exists():
@@ -671,7 +709,50 @@ class PortalPlugin(KapselPlugin):
                 return 1
 
         else:
-            con.print(f"[bold #f43f5e]Unknown hook action:[/] '{action}' (options: status, init, edit, run, rm)")
+            con.print(f"[bold #f43f5e]Unknown hook action:[/] '{action}' (options: status, init, add, paste, edit, run, rm)")
+            return 1
+
+    def _open_editor(self, file_path: Path, con: Console) -> int:
+        """
+        Opens file in the best available editor with nano priority:
+        1. $EDITOR / $VISUAL environment variable
+        2. Terminal editors: nano -> micro -> vim -> vi
+        3. Platform native fallbacks: notepad on Windows, xdg-open on Linux, open on macOS
+        """
+        # 1. Custom environment variable
+        custom_editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+        if custom_editor:
+            exe = shutil.which(custom_editor)
+            if exe:
+                con.print(f"[dim]Opening in $EDITOR ({custom_editor}):[/] [bold #00f0ff]{file_path}[/]")
+                try:
+                    return subprocess.call([exe, str(file_path)])
+                except Exception:
+                    pass
+
+        # 2. Terminal-based editors (nano prioritized)
+        for tui_name in ("nano", "micro", "vim", "vi"):
+            exe = shutil.which(tui_name)
+            if exe:
+                con.print(f"[dim]Opening in {tui_name}:[/] [bold #00f0ff]{file_path}[/]")
+                try:
+                    return subprocess.call([exe, str(file_path)])
+                except Exception:
+                    pass
+
+        # 3. System desktop fallbacks
+        con.print(f"[dim]Opening in system default editor:[/] [bold #00f0ff]{file_path}[/]")
+        try:
+            if sys.platform == "win32":
+                notepad = shutil.which("notepad.exe") or "notepad.exe"
+                return subprocess.call([notepad, str(file_path)])
+            elif sys.platform == "darwin":
+                return subprocess.call(["open", str(file_path)])
+            else:
+                return subprocess.call(["xdg-open", str(file_path)])
+        except Exception as e:
+            con.print(f"[bold #f43f5e]Failed to open editor: {e}[/]")
+            con.print("[dim]Tip: You can use 'kps portal hook add <cmd>' or 'kps portal hook paste' directly.[/]\n")
             return 1
 
     def _execute_portal_hook(self, dir_path: Path, console: Optional[Console] = None) -> bool:

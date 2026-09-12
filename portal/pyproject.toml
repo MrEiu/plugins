@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-portal"
-version = "0.1.3"
+version = "0.1.4"
 description = "Smart directory teleportation and workspace navigator powered by zoxide."
 authors = [{ name = "Kapsel Team" }]
 license = { text = "MIT" }
