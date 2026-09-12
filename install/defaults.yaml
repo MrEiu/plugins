@@ -9,13 +9,13 @@
 # ------------------------------------------------------------------------------
 managers:
   # Windows
-  winget:
-    - winget
-    - winget.exe
   scoop:
     - scoop
     - scoop.cmd
     - scoop.ps1
+  winget:
+    - winget
+    - winget.exe
   choco:
     - choco
     - choco.exe
