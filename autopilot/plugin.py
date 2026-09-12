@@ -31,9 +31,11 @@ ensure_utf8_io()
 def _resolve_pueue_executables() -> Tuple[Optional[str], Optional[str]]:
     """
     Locates 'pueue' (CLI client) and 'pueued' (daemon) executables:
-    1. Scoop direct app path
-    2. Scoop shims / System PATH
-    3. Local Kapsel bin directory (~/.kapsel/bin)
+    1. Local Kapsel bin directory (~/.kapsel/bin)
+    2. Scoop direct app path and shims
+    3. Cargo bin directory (~/.cargo/bin)
+    4. WinGet links directory (Windows)
+    5. System PATH
     """
     is_win = sys.platform == "win32"
     ext = ".exe" if is_win else ""
@@ -41,26 +43,44 @@ def _resolve_pueue_executables() -> Tuple[Optional[str], Optional[str]]:
     pueue_bin: Optional[str] = None
     pueued_bin: Optional[str] = None
 
-    # 1. Direct Scoop app path
     user_home = Path.home()
-    scoop_current = user_home / "scoop" / "apps" / "pueue" / "current"
-    if (scoop_current / f"pueue{ext}").exists():
-        pueue_bin = str(scoop_current / f"pueue{ext}")
-    if (scoop_current / f"pueued{ext}").exists():
-        pueued_bin = str(scoop_current / f"pueued{ext}")
 
-    # 2. System PATH & Scoop shims
+    # 1. Local Kapsel bin directory
+    kapsel_bin = get_kapsel_dir() / "bin"
+    if (kapsel_bin / f"pueue{ext}").exists():
+        pueue_bin = str(kapsel_bin / f"pueue{ext}")
+    if (kapsel_bin / f"pueued{ext}").exists():
+        pueued_bin = str(kapsel_bin / f"pueued{ext}")
+
+    # 2. Direct Scoop app path & shims
+    if not pueue_bin or not pueued_bin:
+        scoop_current = user_home / "scoop" / "apps" / "pueue" / "current"
+        if not pueue_bin and (scoop_current / f"pueue{ext}").exists():
+            pueue_bin = str(scoop_current / f"pueue{ext}")
+        if not pueued_bin and (scoop_current / f"pueued{ext}").exists():
+            pueued_bin = str(scoop_current / f"pueued{ext}")
+
+    # 3. Cargo bin directory
+    if not pueue_bin or not pueued_bin:
+        cargo_bin = user_home / ".cargo" / "bin"
+        if not pueue_bin and (cargo_bin / f"pueue{ext}").exists():
+            pueue_bin = str(cargo_bin / f"pueue{ext}")
+        if not pueued_bin and (cargo_bin / f"pueued{ext}").exists():
+            pueued_bin = str(cargo_bin / f"pueued{ext}")
+
+    # 4. WinGet links
+    if is_win and (not pueue_bin or not pueued_bin):
+        winget_links = user_home / "AppData" / "Local" / "Microsoft" / "WinGet" / "Links"
+        if not pueue_bin and (winget_links / f"pueue{ext}").exists():
+            pueue_bin = str(winget_links / f"pueue{ext}")
+        if not pueued_bin and (winget_links / f"pueued{ext}").exists():
+            pueued_bin = str(winget_links / f"pueued{ext}")
+
+    # 5. System PATH & Scoop shims
     if not pueue_bin:
         pueue_bin = shutil.which("pueue")
     if not pueued_bin:
         pueued_bin = shutil.which("pueued")
-
-    # 3. Local Kapsel bin directory
-    kapsel_bin = get_kapsel_dir() / "bin"
-    if not pueue_bin and (kapsel_bin / f"pueue{ext}").exists():
-        pueue_bin = str(kapsel_bin / f"pueue{ext}")
-    if not pueued_bin and (kapsel_bin / f"pueued{ext}").exists():
-        pueued_bin = str(kapsel_bin / f"pueued{ext}")
 
     return pueue_bin, pueued_bin
 
@@ -99,15 +119,33 @@ def _ensure_daemon_running(console: Optional[Console] = None, silent: bool = Fal
         con.print("[dim]⚡ Autopilot: Starting Pueue background daemon...[/]")
 
     try:
-        # Start daemon with -d flag
-        subprocess.run(
-            [pueued_bin, "-d"],
-            capture_output=True,
-            text=True,
-            timeout=3.0,
-        )
-        # Wait up to 1.5 seconds for daemon to initialize socket
-        for _ in range(15):
+        is_win = sys.platform == "win32"
+        if is_win:
+            flags = 0
+            if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+                flags |= subprocess.CREATE_NEW_PROCESS_GROUP
+            if hasattr(subprocess, "DETACHED_PROCESS"):
+                flags |= subprocess.DETACHED_PROCESS
+
+            subprocess.Popen(
+                [pueued_bin, "-d"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+                close_fds=True,
+            )
+        else:
+            subprocess.Popen(
+                [pueued_bin, "-d"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+
+        # Wait up to 2.0 seconds for daemon to initialize socket
+        for _ in range(20):
             time.sleep(0.1)
             if _is_daemon_alive(pueue_bin):
                 if not silent:
@@ -135,7 +173,7 @@ class AutopilotPlugin(KapselPlugin):
         return PluginManifest(
             id="autopilot",
             name="Autopilot",
-            version="0.1.0",
+            version="0.1.1",
             description="Autonomous background task queue and daemon execution manager powered by Pueue.",
             author="MrEiu",
             homepage="https://github.com/MrEiu/plugins",
@@ -416,9 +454,20 @@ class AutopilotPlugin(KapselPlugin):
 
             cmd_args = ["add"] + opts + ["--"] + cmd_parts
 
+        # Warn if command seems inherently interactive
+        cmd_str = " ".join(cmd_parts).lower()
+        if (
+            cmd_str.strip() in ("python", "python3", "node", "bash", "sh", "zsh", "pwsh", "powershell", "cmd")
+            or (cmd_str.startswith("npm init") and "-y" not in cmd_str)
+            or (cmd_str.startswith("yarn init") and "-y" not in cmd_str)
+            or (cmd_str.startswith("pnpm init") and "-y" not in cmd_str)
+        ):
+            con.print("[yellow]Notice:[/] [dim]Background tasks run non-interactively. Ensure commands do not require user prompts/TTY.[/]")
+
         try:
             res = subprocess.run(
                 [self.pueue_bin] + cmd_args,
+                cwd=os.getcwd(),
                 capture_output=True,
                 text=True,
             )
@@ -491,6 +540,7 @@ class AutopilotPlugin(KapselPlugin):
         Extracts subcommands and active task IDs from Pueue JSON.
         """
         command_line = text_before_cursor
+        ends_with_space = command_line.endswith(" ")
         stripped = command_line.strip()
         tokens = stripped.split()
         if not tokens:
@@ -505,17 +555,47 @@ class AutopilotPlugin(KapselPlugin):
         else:
             return []
 
-        # Dynamic completions for task IDs (e.g. 'kps auto log <Tab>', 'kps auto follow <Tab>', 'kps auto kill <Tab>')
+        # Case 1: Core Subcommands completion (e.g. 'kps auto <Tab>' or 'kps auto l<Tab>')
+        subcommands = [
+            ("add", "Enqueue a command for background execution"),
+            ("status", "Display full task queue status"),
+            ("log", "Display output log for a specific task"),
+            ("follow", "Stream real-time log output for a running task"),
+            ("pause", "Pause running tasks or entire groups"),
+            ("start", "Resume execution of paused tasks"),
+            ("restart", "Restart completed or failed task(s)"),
+            ("kill", "Terminate running task(s) or whole groups"),
+            ("clean", "Remove finished/successful tasks from history"),
+            ("reset", "Kill all running tasks and reset entire queue"),
+            ("parallel", "Adjust maximum concurrent worker tasks"),
+            ("group", "Manage task groups and queues"),
+            ("daemon", "Manage Pueue background service (status, start, stop)"),
+        ]
+
+        if not auto_args or (len(auto_args) == 1 and not ends_with_space):
+            prefix = auto_args[0].lower() if auto_args else ""
+            return [
+                {
+                    "text": name,
+                    "start_position": -len(prefix),
+                    "display": name,
+                    "display_meta": f"🚀 {desc}",
+                }
+                for name, desc in subcommands
+                if name.startswith(prefix)
+            ]
+
+        # Case 2: Dynamic completions for task IDs (e.g. 'kps auto log <Tab>', 'kps auto follow <Tab>', 'kps auto kill <Tab>')
         sub = auto_args[0].lower() if auto_args else ""
         if sub in ("log", "follow", "kill", "restart", "pause", "start", "tail") and (
-            len(auto_args) == 1 and ends_with_space or len(auto_args) == 2 and not ends_with_space
+            (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
         ):
             target_prefix = auto_args[1].lower() if len(auto_args) == 2 else ""
             return self._query_task_id_completions(target_prefix)
 
         # Case 3: Daemon subcommands ('kps auto daemon <Tab>')
         if sub == "daemon" and (
-            len(auto_args) == 1 and ends_with_space or len(auto_args) == 2 and not ends_with_space
+            (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
         ):
             d_prefix = auto_args[1].lower() if len(auto_args) == 2 else ""
             actions = [

@@ -15,7 +15,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
 from rich.panel import Panel
@@ -27,14 +27,98 @@ from .client import AiClient
 def get_terminal_context() -> Dict[str, str]:
     """Inspects the current system, shell, and working directory."""
     os_name = "Windows" if sys.platform == "win32" else ("macOS" if sys.platform == "darwin" else "Linux")
-    from kapsel.core.detector import detector
-    shell_name, shell_path = detector.detect_shell()
+    try:
+        from kapsel.core.detector import detector
+        shell_name, shell_path = detector.detect_shell()
+    except Exception:
+        if sys.platform == "win32":
+            ps_module = os.environ.get("PSModulePath", "")
+            if "PowerShell\\7" in ps_module or "pwsh" in ps_module.lower():
+                shell_name, shell_path = "pwsh", "pwsh.exe"
+            elif "WindowsPowerShell" in ps_module:
+                shell_name, shell_path = "powershell", "powershell.exe"
+            else:
+                shell_name, shell_path = "cmd", os.environ.get("COMSPEC", "cmd.exe")
+        else:
+            shell_env = os.environ.get("SHELL", "/bin/sh")
+            shell_name = Path(shell_env).name
+            shell_path = shell_env
+
     return {
         "os": os_name,
         "shell": shell_name.lower(),
         "shell_path": shell_path or shell_name,
         "cwd": str(Path.cwd()),
     }
+
+
+def run_in_current_environment(command: str, cwd: Optional[str] = None) -> Tuple[int, str]:
+    """
+    Executes a command using the detected host shell calling convention.
+    Streams output to console in real time while buffering lines for block registry logging.
+    Returns (exit_code, output_text).
+    """
+    ctx = get_terminal_context()
+    shell = ctx.get("shell", "").lower()
+    shell_path = ctx.get("shell_path") or shell
+
+    # Construct shell-specific invocation
+    if shell in ("pwsh", "powershell"):
+        exe = shell_path if (shell_path and Path(shell_path).exists()) else (
+            "pwsh.exe" if shell == "pwsh" else "powershell.exe"
+        )
+        args = [exe, "-NoLogo", "-Command", command]
+    elif shell == "cmd":
+        exe = shell_path if (shell_path and Path(shell_path).exists()) else "cmd.exe"
+        args = [exe, "/c", command]
+    else:
+        # Unix shells (bash, zsh, fish, sh)
+        exe = shell_path if (shell_path and Path(shell_path).exists()) else "/bin/sh"
+        args = [exe, "-c", command]
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    env["FORCE_COLOR"] = "1"
+
+    target_cwd = cwd or ctx.get("cwd")
+    captured_lines: List[str] = []
+
+    try:
+        encoding = sys.stdout.encoding or "utf-8"
+        proc = subprocess.Popen(
+            args,
+            shell=False,
+            cwd=target_cwd,
+            env=env,
+            stdin=None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding=encoding,
+            errors="replace",
+            bufsize=1,
+        )
+        if proc.stdout:
+            for line in iter(proc.stdout.readline, ""):
+                sys.stdout.write(line)
+                try:
+                    sys.stdout.flush()
+                except Exception:
+                    pass
+                captured_lines.append(line.rstrip("\r\n"))
+                if len(captured_lines) > 500:
+                    captured_lines.pop(0)
+            proc.stdout.close()
+        proc.wait()
+        ret = proc.returncode if proc.returncode is not None else 0
+        return ret, "\n".join(captured_lines)
+    except Exception as e:
+        try:
+            res = subprocess.run(args, shell=False, cwd=target_cwd, env=env)
+            return res.returncode, ""
+        except Exception as inner_e:
+            return 1, str(inner_e)
+
 
 
 def prompt_action_choice(command: str, con: Console) -> str:
@@ -109,10 +193,30 @@ CRITICAL RULES:
     decision = prompt_action_choice(command, con)
     if decision == "run":
         con.print(f"[dim]Executing:[/] [bold cyan]{command}[/]\n")
-        if executor:
-            return executor.execute(command).exit_code
+        if executor and hasattr(executor, "execute"):
+            exec_res = executor.execute(command)
+            exit_code = getattr(exec_res, "exit_code", 0)
+            output_text = getattr(exec_res, "output_text", "")
         else:
-            return subprocess.run(command, shell=True).returncode
+            exit_code, output_text = run_in_current_environment(command)
+
+        # Record executed command to BlockRegistry so errors can be inspected
+        try:
+            from kapsel.core.block.registry import get_block_registry
+            reg = get_block_registry()
+            reg.add_block(
+                command=command,
+                exit_code=exit_code,
+                duration_ms=0,
+                cwd=ctx.get("cwd", str(Path.cwd())),
+                sub_commands=[command],
+                is_concurrent=False,
+                output_text=output_text,
+            )
+        except Exception:
+            pass
+
+        return exit_code
     elif decision == "copy":
         if copy_to_clipboard(command):
             con.print("[bold #10b981]✔ Command copied to clipboard![/] [dim]Press Ctrl+V to paste and edit.[/]\n")
@@ -135,15 +239,23 @@ def action_fix(
     reg = get_block_registry()
     blocks = reg.get_blocks()
 
-    # Find the latest failed block, or fallback to the latest block
+    # Find the latest failed block, skipping any kps ai invocations to prevent self-diagnosis loops
     target_block = None
     for b in reversed(blocks):
+        cmd_clean = b.command.strip().lower()
+        if cmd_clean.startswith(("kps ai", "kps  ai", "ai fix", "ai ?", "ai ")):
+            continue
         if b.exit_code != 0:
             target_block = b
             break
 
     if not target_block and blocks:
-        target_block = blocks[-1]
+        for b in reversed(blocks):
+            cmd_clean = b.command.strip().lower()
+            if cmd_clean.startswith(("kps ai", "kps  ai", "ai fix", "ai ?", "ai ")):
+                continue
+            target_block = b
+            break
 
     if not target_block:
         con.print("[yellow]No command execution history found to diagnose.[/]\n")
@@ -199,10 +311,30 @@ Output / Error Message:
         decision = prompt_action_choice(fix_cmd, con)
         if decision == "run":
             con.print(f"[dim]Running fix:[/] [bold cyan]{fix_cmd}[/]\n")
-            if executor:
-                return executor.execute(fix_cmd).exit_code
+            if executor and hasattr(executor, "execute"):
+                exec_res = executor.execute(fix_cmd)
+                exit_code = getattr(exec_res, "exit_code", 0)
+                output_text = getattr(exec_res, "output_text", "")
             else:
-                return subprocess.run(fix_cmd, shell=True).returncode
+                exit_code, output_text = run_in_current_environment(fix_cmd)
+
+            # Record executed fix block to BlockRegistry
+            try:
+                from kapsel.core.block.registry import get_block_registry
+                reg = get_block_registry()
+                reg.add_block(
+                    command=fix_cmd,
+                    exit_code=exit_code,
+                    duration_ms=0,
+                    cwd=ctx.get("cwd", str(Path.cwd())),
+                    sub_commands=[fix_cmd],
+                    is_concurrent=False,
+                    output_text=output_text,
+                )
+            except Exception:
+                pass
+
+            return exit_code
         elif decision == "copy":
             copy_to_clipboard(fix_cmd)
             con.print("[bold #10b981]✔ Fix command copied to clipboard![/]\n")

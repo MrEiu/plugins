@@ -211,7 +211,7 @@ def fetch_dynamic_models(
         models_url = f"{clean_base}/models"
 
     headers: Dict[str, str] = {
-        "User-Agent": "Kapsel-AI/0.1.2",
+        "User-Agent": "Kapsel-AI/0.1.3",
         "Accept": "application/json",
     }
     if api_key:

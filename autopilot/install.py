@@ -92,6 +92,10 @@ def install(console: Console, bin_dir: Path) -> bool:
         except Exception:
             pass
 
+    if (bin_dir / f"pueue{'.exe' if is_win else ''}").exists():
+        console.print(f"[dim]✔ pueue found in local bin directory: {bin_dir}[/]")
+        return True
+
     # 4. Cargo fallback
     if shutil.which("cargo"):
         try:
@@ -103,4 +107,61 @@ def install(console: Console, bin_dir: Path) -> bool:
         except Exception:
             pass
 
-    return bool(shutil.which("pueue"))
+    # 5. Direct GitHub Releases fallback (zero-dependency standalone download)
+    if _download_github_release(console, bin_dir):
+        return True
+
+    return bool(shutil.which("pueue")) or (bin_dir / f"pueue{'.exe' if is_win else ''}").exists()
+
+
+def _download_github_release(console: Console, bin_dir: Path) -> bool:
+    """
+    Downloads standalone precompiled pueue and pueued binaries directly from GitHub releases.
+    Fallback when local package managers are unavailable.
+    """
+    import urllib.request
+
+    is_win = sys.platform == "win32"
+    is_mac = sys.platform == "darwin"
+    is_linux = sys.platform.startswith("linux")
+    machine = platform.machine().lower()
+
+    base_url = "https://github.com/Nukesor/pueue/releases/latest/download"
+
+    if is_win:
+        pueue_asset = "pueue-x86_64-pc-windows-msvc.exe"
+        pueued_asset = "pueued-x86_64-pc-windows-msvc.exe"
+        pueue_target = bin_dir / "pueue.exe"
+        pueued_target = bin_dir / "pueued.exe"
+    elif is_mac:
+        arch = "aarch64" if ("arm" in machine or "aarch64" in machine) else "x86_64"
+        pueue_asset = f"pueue-{arch}-apple-darwin"
+        pueued_asset = f"pueued-{arch}-apple-darwin"
+        pueue_target = bin_dir / "pueue"
+        pueued_target = bin_dir / "pueued"
+    elif is_linux:
+        arch = "aarch64" if ("arm" in machine or "aarch64" in machine) else "x86_64"
+        pueue_asset = f"pueue-{arch}-unknown-linux-musl"
+        pueued_asset = f"pueued-{arch}-unknown-linux-musl"
+        pueue_target = bin_dir / "pueue"
+        pueued_target = bin_dir / "pueued"
+    else:
+        return False
+
+    console.print(f"[dim]  Attempting direct GitHub release download to {bin_dir}...[/]")
+    try:
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(f"{base_url}/{pueue_asset}", str(pueue_target))
+        urllib.request.urlretrieve(f"{base_url}/{pueued_asset}", str(pueued_target))
+
+        if not is_win:
+            os.chmod(str(pueue_target), 0o755)
+            os.chmod(str(pueued_target), 0o755)
+
+        if pueue_target.exists() and pueued_target.exists():
+            console.print("[bold #10b981]✔ pueue & pueued downloaded successfully from GitHub Releases![/]")
+            return True
+    except Exception as e:
+        console.print(f"[dim]  Direct download fallback encountered error: {e}[/]")
+
+    return False
