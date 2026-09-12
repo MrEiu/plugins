@@ -90,12 +90,12 @@ class PortalPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="portal",
         name="Portal",
-        version="0.1.2",
-        description="Smart directory teleportation and workspace navigator powered by zoxide.",
+        version="0.1.3",
+        description="Smart directory teleportation and directory-bound initialization hook (.portal) powered by zoxide.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/portal",
         min_kapsel_version="0.1.0",
-        tags=["zoxide", "cd", "navigation", "portal", "frecency", "workspace"],
+        tags=["zoxide", "cd", "navigation", "portal", "hook", "frecency", "workspace"],
     )
 
     def __init__(self) -> None:
@@ -105,6 +105,7 @@ class PortalPlugin(KapselPlugin):
         self._last_recorded_cwd: Optional[str] = None
         self._cached_recent_dirs: List[str] = []
         self._cache_lock = threading.Lock()
+        self._is_running_hook: bool = False
 
     def on_load(self, context: PluginContext) -> None:
         self.context = context
@@ -113,7 +114,7 @@ class PortalPlugin(KapselPlugin):
         # 1. Pre-execution filter: intercepts 'z <query>' and 'portal <query>'
         context.register_hook(HookType.FILTER_COMMAND, self.filter_command)
 
-        # 2. Command execution tracking: auto-learns visited directories
+        # 2. Command execution tracking: auto-learns visited directories and triggers hooks
         context.register_hook(HookType.ON_AFTER_EXECUTE, self.on_after_execute)
 
         # 3. Dynamic autocompletion for portal and zoxide paths
@@ -123,8 +124,18 @@ class PortalPlugin(KapselPlugin):
         context.register_kps_command(
             name="portal",
             handler=self.handle_portal,
-            help_text="Smart directory teleportation and workspace navigator powered by zoxide",
-            usage="kps portal [ls|add|rm|query|open|doctor|init] [keywords]",
+            help_text="Smart directory teleportation and workspace auto-init hooks powered by zoxide",
+            subcommands={
+                "ls": "List ranked directories in portal database",
+                "add": "Register a directory in portal database",
+                "rm": "Remove a directory from portal database",
+                "query": "Resolve and print matching directory path",
+                "open": "Open directory in File Explorer / Finder",
+                "doctor": "Inspect zoxide status and health",
+                "init": "Generate shell integration script",
+                "hook": "Manage directory-bound initialization hooks (.portal)",
+            },
+            usage="kps portal [ls|add|rm|query|open|doctor|init|hook] [args...]",
             scope="feature",
         )
 
@@ -187,8 +198,9 @@ class PortalPlugin(KapselPlugin):
         """
         Triggered after every command execution in Kapsel.
         Automatically updates zoxide frecency ranking if the working directory changed.
+        Executes .portal directory initialization hook if present in new working directory.
         """
-        if exit_code != 0:
+        if exit_code != 0 or self._is_running_hook:
             return
 
         try:
@@ -196,6 +208,7 @@ class PortalPlugin(KapselPlugin):
             if current_cwd != self._last_recorded_cwd:
                 self._last_recorded_cwd = current_cwd
                 self._async_add_directory(current_cwd)
+                self._execute_portal_hook(Path(current_cwd))
         except Exception:
             pass
 
@@ -214,10 +227,58 @@ class PortalPlugin(KapselPlugin):
         if not matched_prefix:
             return []
 
+        remainder = stripped[len(matched_prefix):]
+
+        # Autocomplete for hook subcommand: 'kps portal hook <Tab>'
+        if remainder.startswith("hook "):
+            hook_prefix = remainder[5:].strip().lower()
+            hook_actions = [
+                ("status", "Show .portal hook status in current directory"),
+                ("init", "Create a .portal template file in current directory"),
+                ("edit", "Open .portal in external editor"),
+                ("run", "Execute .portal commands immediately"),
+                ("rm", "Delete .portal file from current directory"),
+            ]
+            return [
+                {
+                    "text": act,
+                    "display": act,
+                    "display_meta": f"🌀 {desc}",
+                    "start_position": -len(hook_prefix) if hook_prefix else 0,
+                }
+                for act, desc in hook_actions
+                if act.startswith(hook_prefix)
+            ]
+
+        # Autocomplete for portal subcommands: 'kps portal <Tab>'
+        if matched_prefix.startswith("kps") or matched_prefix.startswith("kapsel"):
+            tokens = remainder.split()
+            if len(tokens) == 0 or (len(tokens) == 1 and not remainder.endswith(" ")):
+                sub_prefix = tokens[0].lower() if tokens else ""
+                sub_cmds = [
+                    ("ls", "List ranked directories"),
+                    ("add", "Register directory in database"),
+                    ("rm", "Remove directory from database"),
+                    ("query", "Print matching directory path"),
+                    ("open", "Open directory in File Explorer"),
+                    ("doctor", "Inspect zoxide health"),
+                    ("init", "Generate shell integration script"),
+                    ("hook", "Manage directory initialization hook (.portal)"),
+                ]
+                return [
+                    {
+                        "text": sc,
+                        "display": sc,
+                        "display_meta": f"🌀 {desc}",
+                        "start_position": -len(sub_prefix) if sub_prefix else 0,
+                    }
+                    for sc, desc in sub_cmds
+                    if sc.startswith(sub_prefix)
+                ]
+
         if not self._zoxide_bin:
             return []
 
-        remainder = stripped[len(matched_prefix):]
         if remainder.endswith(" ") or not remainder:
             start_pos = 0
             query = ""
@@ -275,6 +336,8 @@ class PortalPlugin(KapselPlugin):
             return self._run_zoxide_interactive(["edit"])
         elif subcmd == "init":
             return self._handle_init_script(args[1:], con)
+        elif subcmd in ("hook", "bind", "autorun"):
+            return self._handle_hook(args[1:], con)
         else:
             # Direct query jump or output: 'kps portal <keywords>'
             query_str = " ".join(args)
@@ -525,6 +588,152 @@ class PortalPlugin(KapselPlugin):
 
         return []
 
+    def _handle_hook(self, args: List[str], con: Console) -> int:
+        """
+        Manages the .portal directory-bound initialization hook in the current directory.
+        Subcommands:
+          kps portal hook              -> view status / cat
+          kps portal hook init         -> create template .portal
+          kps portal hook edit         -> open in editor
+          kps portal hook run          -> run commands immediately
+          kps portal hook rm           -> delete .portal
+        """
+        action = args[0].lower() if args else "status"
+        cwd = Path.cwd()
+        hook_path = cwd / ".portal"
+
+        if action in ("status", "cat", "show"):
+            if not hook_path.exists():
+                con.print(f"[dim]No .portal hook found in current directory:[/] [bold]{cwd}[/]")
+                con.print("[dim]Create one using:[/] [bold #00f0ff]kps portal hook init[/]\n")
+                return 0
+
+            content = hook_path.read_text(encoding="utf-8", errors="replace")
+            con.print(f"\n[bold #00f0ff]🌀 Portal Hook (.portal) in[/] [bold #a855f7]{cwd}[/]:")
+            lines = [ln.strip() for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+            con.print(Panel(content.strip(), border_style="#0891b2", title=f"{len(lines)} active command(s)"))
+            con.print("[dim]Edit with 'kps portal hook edit' · Test run with 'kps portal hook run'[/]\n")
+            return 0
+
+        elif action in ("init", "create", "new"):
+            if hook_path.exists():
+                con.print(f"[yellow]A .portal hook already exists in:[/] [bold]{hook_path}[/]")
+                con.print("[dim]To edit it, run:[/] [bold #00f0ff]kps portal hook edit[/]\n")
+                return 0
+
+            template = (
+                "# .portal - Directory Auto-Run Hook\n"
+                "# Commands in this file are executed sequentially whenever you enter this directory.\n"
+                "# Lines starting with '#' are ignored.\n\n"
+                "# Example commands:\n"
+                "# git status -s\n"
+            )
+            hook_path.write_text(template, encoding="utf-8")
+            con.print(f"[bold #10b981]✔ Created .portal hook file at:[/] [bold #00f0ff]{hook_path}[/]")
+            con.print("[dim]Run 'kps portal hook edit' to customize initialization commands.[/]\n")
+            return 0
+
+        elif action in ("edit", "open"):
+            if not hook_path.exists():
+                self._handle_hook(["init"], con)
+
+            con.print(f"[dim]Opening .portal in editor:[/] [bold #00f0ff]{hook_path}[/]")
+            try:
+                if sys.platform == "win32":
+                    os.startfile(str(hook_path))
+                elif sys.platform == "darwin":
+                    subprocess.run(["open", str(hook_path)])
+                else:
+                    subprocess.run(["xdg-open", str(hook_path)])
+                con.print("[bold #10b981]✔ Opened in editor[/]\n")
+                return 0
+            except Exception as e:
+                con.print(f"[bold #f43f5e]Failed to open editor: {e}[/]")
+                return 1
+
+        elif action in ("run", "exec"):
+            if not hook_path.exists():
+                con.print(f"[bold #f43f5e]Error:[/] No .portal file found in [white]{cwd}[/]")
+                return 1
+            executed = self._execute_portal_hook(cwd, con)
+            return 0 if executed else 1
+
+        elif action in ("rm", "remove", "del", "delete"):
+            if not hook_path.exists():
+                con.print(f"[dim]No .portal hook to remove in {cwd}[/]\n")
+                return 0
+            try:
+                hook_path.unlink()
+                con.print(f"[bold #10b981]✔ Removed .portal hook from:[/] [white]{cwd}[/]\n")
+                return 0
+            except Exception as e:
+                con.print(f"[bold #f43f5e]Failed to delete .portal:[/] {e}")
+                return 1
+
+        else:
+            con.print(f"[bold #f43f5e]Unknown hook action:[/] '{action}' (options: status, init, edit, run, rm)")
+            return 1
+
+    def _execute_portal_hook(self, dir_path: Path, console: Optional[Console] = None) -> bool:
+        """
+        Reads and executes sequentially all non-comment commands in a '.portal' file.
+        """
+        hook_file = dir_path / ".portal"
+        if not hook_file.exists() or not hook_file.is_file():
+            return False
+
+        try:
+            raw_text = hook_file.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            return False
+
+        commands: List[str] = []
+        for line in raw_text.splitlines():
+            cleaned = line.strip()
+            if cleaned and not cleaned.startswith("#"):
+                commands.append(cleaned)
+
+        if not commands:
+            return False
+
+        con = console or Console(legacy_windows=False)
+        con.print(f"\n[bold #00f0ff]🌀 Portal Hook:[/] Executing directory initialization in [dim]{dir_path.name}[/] ({len(commands)} command{'s' if len(commands) > 1 else ''})...")
+
+        self._is_running_hook = True
+        try:
+            shell_name = "cmd" if sys.platform == "win32" else "sh"
+            shell_bin = None
+            if self.context and hasattr(self.context, "environment"):
+                try:
+                    s_name, s_path = self.context.environment.detect_shell()
+                    shell_name = s_name
+                    shell_bin = s_path
+                except Exception:
+                    pass
+
+            for idx, cmd in enumerate(commands, 1):
+                con.print(f"  [dim]{idx}/{len(commands)}[/] [bold #a855f7]❯[/] [white]{cmd}[/]")
+                try:
+                    if sys.platform == "win32":
+                        if shell_name in ("pwsh", "powershell") and (shell_bin or shutil.which(shell_name)):
+                            exe = shell_bin or shutil.which(shell_name)
+                            res = subprocess.run([exe, "-Command", cmd], cwd=str(dir_path))
+                        else:
+                            res = subprocess.run(cmd, shell=True, cwd=str(dir_path))
+                    else:
+                        shell_exe = shell_bin or shutil.which("bash") or "/bin/sh"
+                        res = subprocess.run([shell_exe, "-c", cmd], cwd=str(dir_path))
+
+                    if res.returncode != 0:
+                        con.print(f"  [bold #f43f5e]✘ Command exited with code {res.returncode}[/]")
+                except Exception as err:
+                    con.print(f"  [bold #f43f5e]✘ Execution error:[/] {err}")
+
+            con.print("[bold #10b981]✔ Portal initialization complete.[/]\n")
+            return True
+        finally:
+            self._is_running_hook = False
+
     def _run_zoxide_interactive(self, args: List[str]) -> int:
         """Runs an interactive zoxide subcommand inheriting stdout/stdin."""
         assert self._zoxide_bin is not None
@@ -537,14 +746,15 @@ class PortalPlugin(KapselPlugin):
     def _render_help(self, con: Console) -> None:
         """Renders rich help panel for Portal."""
         help_text = (
-            "[bold #00f0ff]Kapsel Portal - Smart Directory Teleportation (powered by zoxide)[/]\n"
-            "[dim]Learns your project workspaces and enables instant navigation with minimal keystrokes.[/]\n\n"
+            "[bold #00f0ff]Kapsel Portal - Smart Directory Teleportation & Auto-Init (powered by zoxide)[/]\n"
+            "[dim]Learns your workspaces and runs directory-bound .portal initialization hooks.[/]\n\n"
             "[bold #a855f7]Quick Jumping (in Kapsel Terminal):[/]\n"
             "  [#10b981]z <keywords>[/]                Teleport to best matching workspace (e.g. 'z kap')\n"
             "  [#10b981]portal <keywords>[/]           Teleport to best matching workspace\n"
             "  [#10b981]z[/]                          Jump to home directory (~)\n"
             "  [#10b981]z -[/]                        Jump to previous directory\n\n"
             "[bold #a855f7]Management Commands (kps portal):[/]\n"
+            "  [#00f0ff]kps portal hook [subcmd][/]    Manage directory auto-run hook (.portal)\n"
             "  [#00f0ff]kps portal ls [query][/]       List ranked directories and frecency scores\n"
             "  [#00f0ff]kps portal add [path][/]       Register directory in portal database (default: cwd)\n"
             "  [#00f0ff]kps portal rm <path>[/]        Remove directory path from portal database\n"
@@ -555,8 +765,9 @@ class PortalPlugin(KapselPlugin):
             "  [#00f0ff]kps portal init [shell][/]     Generate external shell hook configuration\n\n"
             "[bold #a855f7]Examples:[/]\n"
             "  [dim]$[/] [white]z kap[/]                  [dim]# Teleports directly to ~/Desktop/Kapsel[/]\n"
-            "  [dim]$[/] [white]kps portal ls[/]          [dim]# View all tracked workspaces and rankings[/]\n"
-            "  [dim]$[/] [white]kps portal open[/]        [dim]# Opens current folder in Explorer / Finder[/]"
+            "  [dim]$[/] [white]kps portal hook init[/]   [dim]# Creates .portal hook file in current directory[/]\n"
+            "  [dim]$[/] [white]kps portal hook edit[/]   [dim]# Edits .portal commands in text editor[/]\n"
+            "  [dim]$[/] [white]kps portal ls[/]          [dim]# View all tracked workspaces and rankings[/]"
         )
         con.print(Panel(help_text, title="[bold #00f0ff]🌀 kps portal[/]", border_style="#0891b2"))
 
