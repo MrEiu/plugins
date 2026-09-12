@@ -33,3 +33,30 @@ commands:
   description: 直接编辑zoxide数据库
 - name: init
   description: 生成外部Shell钩子配置
+- name: hook
+  description: 管理与目录绑定的自动初始化钩子（.portal）
+  commands:
+  - name: status
+    aliases:
+    - cat
+    - show
+    description: 查看当前目录的.portal钩子状态与命令
+  - name: init
+    aliases:
+    - create
+    - new
+    description: 在当前目录下创建.portal初始化钩子模板
+  - name: edit
+    aliases:
+    - open
+    description: 在系统外部编辑器中打开并编辑.portal文件
+  - name: run
+    aliases:
+    - exec
+    description: 立即执行当前目录的.portal初始化命令链
+  - name: rm
+    aliases:
+    - remove
+    - del
+    - delete
+    description: 删除当前目录下的.portal钩子文件

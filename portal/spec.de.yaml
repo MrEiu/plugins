@@ -34,3 +34,30 @@ commands:
   description: zoxide-Datenbank direkt bearbeiten
 - name: init
   description: Externe Shell-Hook-Konfiguration generieren
+- name: hook
+  description: Verzeichnisgebundene Initialisierungs-Hooks (.portal) verwalten
+  commands:
+  - name: status
+    aliases:
+    - cat
+    - show
+    description: Status und Befehle des .portal-Hooks im aktuellen Verzeichnis anzeigen
+  - name: init
+    aliases:
+    - create
+    - new
+    description: .portal-Hook-Vorlage im aktuellen Verzeichnis erstellen
+  - name: edit
+    aliases:
+    - open
+    description: .portal im externen Editor öffnen
+  - name: run
+    aliases:
+    - exec
+    description: .portal-Befehle sofort ausführen
+  - name: rm
+    aliases:
+    - remove
+    - del
+    - delete
+    description: .portal-Hook-Datei aus aktuellem Verzeichnis löschen

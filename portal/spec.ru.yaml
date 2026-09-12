@@ -33,3 +33,30 @@ commands:
   description: Напрямую редактировать базу данных zoxide
 - name: init
   description: Сгенерировать конфигурацию внешнего хука оболочки
+- name: hook
+  description: Управление хуками инициализации каталогов (.portal)
+  commands:
+  - name: status
+    aliases:
+    - cat
+    - show
+    description: Показать статус и команды хука .portal в текущем каталоге
+  - name: init
+    aliases:
+    - create
+    - new
+    description: Создать шаблон хука .portal в текущем каталоге
+  - name: edit
+    aliases:
+    - open
+    description: Открыть .portal во внешнем редакторе
+  - name: run
+    aliases:
+    - exec
+    description: Немедленно выполнить команды .portal в текущем каталоге
+  - name: rm
+    aliases:
+    - remove
+    - del
+    - delete
+    description: Удалить файл хука .portal из текущего каталога
