@@ -27,3 +27,21 @@ commands:
     description: "Directly edit zoxide database"
   - name: init
     description: "Generate external shell hook configuration"
+  - name: hook
+    description: "Manage directory-bound initialization hooks (.portal)"
+    commands:
+      - name: status
+        aliases: ["cat", "show"]
+        description: "Display .portal hook commands in current directory"
+      - name: init
+        aliases: ["create", "new"]
+        description: "Create a .portal template file in current directory"
+      - name: edit
+        aliases: ["open"]
+        description: "Open .portal in external editor"
+      - name: run
+        aliases: ["exec"]
+        description: "Execute .portal commands immediately"
+      - name: rm
+        aliases: ["remove", "del", "delete"]
+        description: "Delete .portal file from current directory"
