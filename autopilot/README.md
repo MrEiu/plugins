@@ -1,111 +1,144 @@
-# Autopilot Plugin for Kapsel
+# Autopilot Plugin for Kapsel (PM2 Process Supervisor)
 
-Autonomous background task queue and daemon execution manager for the **Kapsel** shell, powered by [Pueue](https://github.com/Nukesor/pueue).
+Production process manager, cluster supervisor, and daemon orchestrator for the **Kapsel** shell, powered by [PM2](https://pm2.keymetrics.io/).
 
-The plugin enables developers to enqueue long-running commands (builds, tests, downloads, data migrations, training jobs) in the background, monitor task queues, inspect logs, and stream real-time terminal output without blocking the current interactive session.
+Autopilot empowers developers and DevOps engineers to manage microservices, background workers, web servers, and automation scripts with zero-downtime rolling reloads, automatic crash recovery, multi-runtime execution, and real-time observability.
 
 ---
 
 ## Key Features
 
-- **Zero-Friction Daemon Auto-Start**: Automatically launches `pueued -d` in the background on demand. You will never encounter "daemon not running" errors.
-- **Background Task Enqueueing**: Dispatch any command to the background queue with a simple `kps auto add <command>`.
-- **Rich Status Dashboard**: Visual terminal dashboard with status badges, worker concurrency, and execution durations.
-- **Log Streaming & Inspection**: Check past task outputs with `kps auto log <id>` or follow live stdout/stderr streams like `tail -f` with `kps auto follow <id>`.
-- **Task Lifecycle Control**: Pause, resume, restart, and kill tasks or entire groups.
-- **Dynamic Context Autocompletion**: Auto-completes subcommands and live task IDs with command summaries and status indicators.
+- **Polyglot Multi-Runtime Execution**: Run Node.js, Python, TypeScript, Bash/Shell scripts, or compiled binaries (Go, Rust). Autopilot automatically infers and attaches appropriate interpreters (e.g. `python`, `bash`, `tsx`).
+- **Cluster Mode & Zero-Downtime Reload (`kps ap reload`)**: Scale Node.js applications across all CPU cores with automatic load balancing. Perform rolling updates without dropping active HTTP/TCP client connections.
+- **Self-Healing & Memory Watchdog**: Guard against memory leaks with `--max-memory-restart <size>` (e.g. `300M`), exponential crash backoff delays, and auto-restart on boot.
+- **Rich Aesthetic Dashboard (`kps ap`)**: Cyberpunk/Neon styled terminal overview displaying PID, mode, CPU usage, memory consumption, uptime, and restart counts at a glance.
+- **Dynamic Context Autocompletion**: Live Carapace integration that dynamically queries `pm2 jlist` to suggest active process names and IDs with status badges (`🟢 online`, `🔴 errored`, `⏸️ stopped`) and live CPU/memory metrics.
+- **Declarative Ecosystem Generation (`kps ap init`)**: Generates a battle-tested `ecosystem.config.cjs` template ready for multi-service environments.
+- **System Boot Persistence**: Snapshot and restore running processes across reboots with `kps ap save`, `kps ap resurrect`, and `kps ap startup`.
+- **Integrated Terminal Observability**: Full-screen interactive dashboard via `kps ap monit`, plus real-time aggregated log streaming via `kps ap follow`.
 
 ---
 
 ## Installation
 
-Add and enable the plugin via Kapsel system command:
+Install and enable the plugin via Kapsel system command:
 
 ```bash
 kapsel add autopilot
 ```
 
-*(Automatically detects and installs `pueue` via Scoop, Winget, or Cargo if not present).*
+*(Automatically detects and installs PM2 globally via npm, pnpm, yarn, Scoop, or Homebrew if not already installed).*
+
+Manual installation via npm:
+
+```bash
+npm install -g pm2
+```
 
 ---
 
 ## Usage
 
-### 1. Dashboard Overview (`kps auto`)
+Both `kps autopilot` and the short ergonomic alias `kps ap` are supported.
 
-Run `kps auto` without arguments to view the active queue overview and command guide:
+### 1. Visual Dashboard Overview (`kps ap`)
+
+Run `kps ap` without arguments to inspect all active processes and daemon metrics:
 
 ```bash
-kps auto
+kps ap
 ```
 
-### 2. Enqueueing Background Tasks (`kps auto add <command...>`)
+### 2. Starting Scripts and Services (`kps ap start`)
 
-Send long-running tasks to run asynchronously in the background:
+Start any script or application. The runtime interpreter is automatically detected:
 
 ```bash
-kps auto add npm run build
-kps auto add cargo build --release
-kps auto add python scripts/train_model.py
+# Node.js
+kps ap start server.js --name web-api
+
+# Python worker (automatically uses python interpreter)
+kps ap start scripts/worker.py --name data-sync
+
+# Cluster mode scaling across all CPU cores
+kps ap start server.js -i max --name cluster-api
+
+# Memory limit auto-restart & file watch
+kps ap start app.js --max-memory-restart 300M --watch
+
+# Declarative ecosystem configuration
+kps ap start ecosystem.config.cjs
 ```
 
-Natural shortcut syntax is also supported:
+### 3. Zero-Downtime Rolling Reload (`kps ap reload`)
+
+For cluster applications, reload workers one-by-one with zero downtime:
 
 ```bash
-kps auto "docker compose up -d"
+kps ap reload web-api
+kps ap reload all
 ```
 
-### 3. Checking Queue Status (`kps auto status`)
-
-View full task status, including queue positions and execution times:
+### 4. Process Lifecycle Management
 
 ```bash
-kps auto status
+# Stop a process
+kps ap stop web-api
+kps ap stop 0
+kps ap stop all
+
+# Restart a process
+kps ap restart web-api
+
+# Delete a process from PM2
+kps ap delete web-api
+kps ap delete all
 ```
 
-For programmatic pipelines, get structured JSON output:
+### 5. Inspecting Logs & Observability
 
 ```bash
-kps auto status --json
+# View last 50 lines of logs
+kps ap logs web-api --lines 50
+
+# Follow live output stream in real time (tail -f style)
+kps ap follow web-api
+
+# Clear log files
+kps ap flush web-api
+
+# Full-screen interactive ncurses terminal monitor
+kps ap monit
+
+# Detailed metadata, environment, and paths
+kps ap describe web-api
 ```
 
-### 4. Inspecting Logs (`kps auto log` & `kps auto follow`)
-
-View stdout and stderr from a completed task:
+### 6. System Persistence & Boot Auto-Start
 
 ```bash
-kps auto log 0
+# Snapshot active process state to disk (~/.pm2/dump.pm2)
+kps ap save
+
+# Restore process snapshot after system restart
+kps ap resurrect
+
+# Configure OS init service (systemd, Windows service, launchd)
+kps ap startup
 ```
 
-Follow a currently running task's output stream live:
+### 7. Generating Ecosystem Config Template (`kps ap init`)
+
+Generate a clean, modern `ecosystem.config.cjs` template:
 
 ```bash
-kps auto follow 0
-```
-
-### 5. Controlling Task Execution
-
-```bash
-kps auto pause 0          # Pause task #0
-kps auto start 0          # Resume task #0
-kps auto restart 0        # Re-run task #0
-kps auto kill 0           # Terminate task #0
-kps auto clean            # Remove all successfully finished tasks from history
-kps auto reset            # Kill all running tasks and reset entire queue
-```
-
-### 6. Concurrency & Daemon Management
-
-```bash
-kps auto parallel 4       # Allow up to 4 tasks to run in parallel
-kps auto daemon status    # Check Pueue background service status
-kps auto daemon restart   # Restart the Pueue background daemon
+kps ap init
 ```
 
 ---
 
-## Autocompletion
+## Dynamic Autocompletion
 
 Tab completion dynamically suggests:
-- Core subcommands: `add`, `status`, `log`, `follow`, `pause`, `start`, `restart`, `kill`, `clean`, `daemon`, etc.
-- Active & recent task IDs: `kps auto log <Tab>` will display task numbers alongside their command snippets and status icons (`🟢 Running`, `✔ Done`, `❌ Failed`).
+- Core subcommands: `start`, `stop`, `restart`, `reload`, `delete`, `logs`, `follow`, `monit`, `describe`, `save`, `resurrect`, `init`, `status`.
+- Active process targets: `kps ap restart <Tab>` or `kps ap logs <Tab>` dynamically lists running process names and numeric IDs with real-time status badges (`🟢 online`, `🔴 errored`, `⏸️ stopped`), current CPU%, and memory usage.

@@ -1,6 +1,6 @@
 """
-Installer for autopilot (Pueue task queue) plugin.
-Installs pueue and pueued across platforms via package managers or cargo.
+Installer for Autopilot (PM2 process manager) plugin.
+Installs PM2 globally across platforms via npm, pnpm, yarn, scoop, or brew.
 All comments and descriptions are in English.
 """
 
@@ -13,155 +13,133 @@ import sys
 from rich.console import Console
 
 
+def _resolve_pm2_binary() -> str | None:
+    """Checks for existing pm2 executable across PATH and known platform locations."""
+    # 1. Standard PATH
+    bin_path = shutil.which("pm2")
+    if bin_path:
+        return bin_path
+
+    is_win = sys.platform == "win32"
+    if is_win:
+        bin_path_cmd = shutil.which("pm2.cmd")
+        if bin_path_cmd:
+            return bin_path_cmd
+
+        user_profile = Path(os.environ.get("USERPROFILE", Path.home()))
+        appdata = Path(os.environ.get("APPDATA", user_profile / "AppData" / "Roaming"))
+        localappdata = Path(os.environ.get("LOCALAPPDATA", user_profile / "AppData" / "Local"))
+
+        candidates = [
+            appdata / "npm" / "pm2.cmd",
+            appdata / "npm" / "pm2",
+            user_profile / "scoop" / "shims" / "pm2.cmd",
+            user_profile / "scoop" / "apps" / "pm2" / "current" / "pm2.cmd",
+            localappdata / "pnpm" / "pm2.cmd",
+            localappdata / "Yarn" / "bin" / "pm2.cmd",
+            user_profile / ".local" / "bin" / "pm2.cmd",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+    else:
+        candidates = [
+            Path("/usr/local/bin/pm2"),
+            Path("/opt/homebrew/bin/pm2"),
+            Path.home() / ".nvm" / "versions" / "node",
+            Path.home() / ".local" / "share" / "pnpm" / "pm2",
+            Path.home() / ".npm-global" / "bin" / "pm2",
+        ]
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_file():
+                return str(candidate)
+
+    return None
+
+
 def install(console: Console, bin_dir: Path) -> bool:
     """
-    Installs pueue & pueued CLI tools across platforms:
-    1. Check existing PATH, Scoop, Kapsel bin, Cargo bin, WinGet
-    2. Try kps install pueue
-    3. Windows: Scoop or Winget
-    4. macOS / Linux: Homebrew (brew install pueue)
-    5. Cargo if available (cargo install --locked pueue)
+    Installs PM2 process manager:
+    1. Verify if pm2 is already available.
+    2. Try installing via npm (npm install -g pm2).
+    3. Try installing via pnpm / yarn.
+    4. On Windows: fallback to Scoop (scoop install pm2).
+    5. On macOS / Linux: fallback to Homebrew (brew install pm2).
     """
-    is_win = sys.platform == "win32"
-
-    if shutil.which("pueue"):
-        console.print("[dim]✔ pueue is already available in PATH.[/]")
+    existing = _resolve_pm2_binary()
+    if existing:
+        console.print(f"[dim]✔ PM2 is already available at: {existing}[/]")
         return True
-
-    # Check common known locations on Windows
-    if is_win:
-        user_profile = Path(os.environ.get("USERPROFILE", Path.home()))
-        for candidate in [
-            user_profile / "scoop/shims/pueue.exe",
-            user_profile / "scoop/apps/pueue/current/pueue.exe",
-            user_profile / ".cargo/bin/pueue.exe",
-            user_profile / "AppData/Local/Microsoft/WinGet/Links/pueue.exe",
-        ]:
-            if candidate.exists():
-                console.print(f"[dim]✔ pueue found at {candidate}[/]")
-                return True
 
     system_name = platform.system().lower()
-    console.print(f"[bold #00f0ff]📦 Installing pueue for platform: {system_name}...[/]")
+    console.print(f"[bold #00f0ff]📦 Installing PM2 process supervisor for platform: {system_name}...[/]")
 
-    # 1. Try unified package manager (kps install)
+    # 1. Try unified package manager (kps install pm2) if kps is present
     if shutil.which("kps"):
         try:
-            res = subprocess.run(["kps", "install", "pueue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-            if res.returncode == 0 and shutil.which("pueue"):
-                console.print("[bold #10b981]✔ pueue successfully installed via kps install![/]")
+            res = subprocess.run(["kps", "install", "pm2"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+            if res.returncode == 0 and _resolve_pm2_binary():
+                console.print("[bold #10b981]✔ PM2 successfully installed via kps install![/]")
                 return True
         except Exception:
             pass
 
-    # 2. Windows: Scoop / Winget
-    if is_win:
-        if shutil.which("scoop"):
+    # 2. Try npm (most standard and recommended distribution for PM2)
+    npm_bin = shutil.which("npm.cmd") if sys.platform == "win32" else shutil.which("npm")
+    if not npm_bin:
+        npm_bin = shutil.which("npm")
+
+    if npm_bin:
+        console.print("[dim]→ Running npm install -g pm2...[/]")
+        try:
+            res = subprocess.run([npm_bin, "install", "-g", "pm2"], capture_output=True, text=True, timeout=180)
+            if res.returncode == 0 and _resolve_pm2_binary():
+                console.print("[bold #10b981]✔ PM2 successfully installed globally via npm![/]")
+                return True
+        except Exception as e:
+            console.print(f"[dim yellow]npm install encountered an issue: {e}[/]")
+
+    # 3. Try pnpm
+    pnpm_bin = shutil.which("pnpm.cmd") if sys.platform == "win32" else shutil.which("pnpm")
+    if pnpm_bin:
+        try:
+            res = subprocess.run([pnpm_bin, "add", "-g", "pm2"], capture_output=True, text=True, timeout=180)
+            if res.returncode == 0 and _resolve_pm2_binary():
+                console.print("[bold #10b981]✔ PM2 successfully installed via pnpm![/]")
+                return True
+        except Exception:
+            pass
+
+    # 4. Windows: Scoop
+    if sys.platform == "win32":
+        scoop_bin = shutil.which("scoop.cmd") or shutil.which("scoop")
+        if scoop_bin:
             try:
-                console.print("[dim]  Attempting installation via Scoop...[/]")
-                res = subprocess.run(["scoop", "install", "pueue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=90)
-                if res.returncode == 0 and shutil.which("pueue"):
-                    console.print("[bold #10b981]✔ pueue installed via Scoop![/]")
+                res = subprocess.run([scoop_bin, "install", "pm2"], capture_output=True, text=True, timeout=180)
+                if res.returncode == 0 and _resolve_pm2_binary():
+                    console.print("[bold #10b981]✔ PM2 successfully installed via Scoop![/]")
                     return True
             except Exception:
                 pass
 
-        if shutil.which("winget"):
-            try:
-                console.print("[dim]  Attempting installation via WinGet...[/]")
-                res = subprocess.run(
-                    ["winget", "install", "-e", "--id", "arnstn.pueue", "--accept-source-agreements", "--accept-package-agreements"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=90,
-                )
-                if res.returncode == 0 and shutil.which("pueue"):
-                    console.print("[bold #10b981]✔ pueue installed via WinGet![/]")
-                    return True
-            except Exception:
-                pass
-
-    # 3. macOS / Linux: Homebrew
-    if (sys.platform == "darwin" or sys.platform.startswith("linux")) and shutil.which("brew"):
+    # 5. macOS / Linux: Homebrew
+    brew_bin = shutil.which("brew")
+    if brew_bin:
         try:
-            console.print("[dim]  Attempting installation via Homebrew...[/]")
-            res = subprocess.run(["brew", "install", "pueue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-            if res.returncode == 0 and shutil.which("pueue"):
-                console.print("[bold #10b981]✔ pueue installed via Homebrew![/]")
+            res = subprocess.run([brew_bin, "install", "pm2"], capture_output=True, text=True, timeout=180)
+            if res.returncode == 0 and _resolve_pm2_binary():
+                console.print("[bold #10b981]✔ PM2 successfully installed via Homebrew![/]")
                 return True
         except Exception:
             pass
 
-    if (bin_dir / f"pueue{'.exe' if is_win else ''}").exists():
-        console.print(f"[dim]✔ pueue found in local bin directory: {bin_dir}[/]")
+    # Final check
+    resolved = _resolve_pm2_binary()
+    if resolved:
+        console.print(f"[bold #10b981]✔ PM2 detected at: {resolved}[/]")
         return True
 
-    # 4. Cargo fallback
-    if shutil.which("cargo"):
-        try:
-            console.print("[dim]  Attempting installation via Cargo...[/]")
-            res = subprocess.run(["cargo", "install", "--locked", "pueue"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
-            if res.returncode == 0 and shutil.which("pueue"):
-                console.print("[bold #10b981]✔ pueue installed via Cargo![/]")
-                return True
-        except Exception:
-            pass
-
-    # 5. Direct GitHub Releases fallback (zero-dependency standalone download)
-    if _download_github_release(console, bin_dir):
-        return True
-
-    return bool(shutil.which("pueue")) or (bin_dir / f"pueue{'.exe' if is_win else ''}").exists()
-
-
-def _download_github_release(console: Console, bin_dir: Path) -> bool:
-    """
-    Downloads standalone precompiled pueue and pueued binaries directly from GitHub releases.
-    Fallback when local package managers are unavailable.
-    """
-    import urllib.request
-
-    is_win = sys.platform == "win32"
-    is_mac = sys.platform == "darwin"
-    is_linux = sys.platform.startswith("linux")
-    machine = platform.machine().lower()
-
-    base_url = "https://github.com/Nukesor/pueue/releases/latest/download"
-
-    if is_win:
-        pueue_asset = "pueue-x86_64-pc-windows-msvc.exe"
-        pueued_asset = "pueued-x86_64-pc-windows-msvc.exe"
-        pueue_target = bin_dir / "pueue.exe"
-        pueued_target = bin_dir / "pueued.exe"
-    elif is_mac:
-        arch = "aarch64" if ("arm" in machine or "aarch64" in machine) else "x86_64"
-        pueue_asset = f"pueue-{arch}-apple-darwin"
-        pueued_asset = f"pueued-{arch}-apple-darwin"
-        pueue_target = bin_dir / "pueue"
-        pueued_target = bin_dir / "pueued"
-    elif is_linux:
-        arch = "aarch64" if ("arm" in machine or "aarch64" in machine) else "x86_64"
-        pueue_asset = f"pueue-{arch}-unknown-linux-musl"
-        pueued_asset = f"pueued-{arch}-unknown-linux-musl"
-        pueue_target = bin_dir / "pueue"
-        pueued_target = bin_dir / "pueued"
-    else:
-        return False
-
-    console.print(f"[dim]  Attempting direct GitHub release download to {bin_dir}...[/]")
-    try:
-        bin_dir.mkdir(parents=True, exist_ok=True)
-        urllib.request.urlretrieve(f"{base_url}/{pueue_asset}", str(pueue_target))
-        urllib.request.urlretrieve(f"{base_url}/{pueued_asset}", str(pueued_target))
-
-        if not is_win:
-            os.chmod(str(pueue_target), 0o755)
-            os.chmod(str(pueued_target), 0o755)
-
-        if pueue_target.exists() and pueued_target.exists():
-            console.print("[bold #10b981]✔ pueue & pueued downloaded successfully from GitHub Releases![/]")
-            return True
-    except Exception as e:
-        console.print(f"[dim]  Direct download fallback encountered error: {e}[/]")
-
+    console.print("\n[bold #f43f5e]✘ Automatic installation of PM2 could not be completed.[/]")
+    console.print("[yellow]Please ensure Node.js is installed, then run:[/]")
+    console.print("[bold #00f0ff]  npm install -g pm2[/]\n")
     return False

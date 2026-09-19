@@ -33,3 +33,30 @@ commands:
   description: 直接编辑zoxide数据库
 - name: init
   description: 生成外部Shell钩子配置
+- name: hook
+  description: ディレクトリ初期化フック（.portal）の管理
+  commands:
+  - name: status
+    aliases:
+    - cat
+    - show
+    description: カレントディレクトリの.portalフック状態とコマンドを表示
+  - name: init
+    aliases:
+    - create
+    - new
+    description: カレントディレクトリに.portalテンプレートを作成
+  - name: edit
+    aliases:
+    - open
+    description: 外部エディタで.portalを開いて編集
+  - name: run
+    aliases:
+    - exec
+    description: カレントディレクトリの.portalコマンドを直ちに実行
+  - name: rm
+    aliases:
+    - remove
+    - del
+    - delete
+    description: カレントディレクトリの.portalファイルを削除

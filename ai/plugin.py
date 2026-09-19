@@ -23,7 +23,6 @@ from .wizard import run_ai_setup_wizard
 from .actions import (
     action_do,
     action_fix,
-    action_commit,
     action_explain,
     action_pipe,
     action_scout,
@@ -61,7 +60,7 @@ class AiPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="ai",
         name="Ai",
-        version="0.1.3",
+        version="0.1.4",
         description="Native terminal AI assistant powered by OpenAI Python SDK.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/ai",
@@ -80,15 +79,14 @@ class AiPlugin(KapselPlugin):
         context.register_kps_command(
             name="ai",
             handler=self.handle_ai,
-            help_text="Terminal AI copilot: nl commands, auto-fix, git commit, explain, scout",
-            usage="kps ai [do|fix|commit|explain|scout|config|init] [args...]",
+            help_text="Terminal AI copilot: nl commands, auto-fix, explain, scout",
+            usage="kps ai [do|fix|explain|scout|config|init] [args...]",
             subcommands={
                 "init": "Run interactive guided setup wizard for AI provider and API key",
                 "config": "Inspect, test, or switch active AI model and configuration",
                 "do": "Generate shell command from natural language with 1-click execution",
                 "fix": "Auto-diagnose and propose 1-click fix for the last failed command",
                 "?": "Alias for 'fix' (quick error diagnosis)",
-                "commit": "Generate Conventional Commit message from git diff and commit",
                 "explain": "Dissect and explain shell command flags and arguments",
                 "scout": "Reconnaissance workspace project architecture, stack, and entrypoints",
             },
@@ -103,7 +101,6 @@ class AiPlugin(KapselPlugin):
         - 'kps ai init' / 'kps ai setup'        -> Guided setup wizard
         - 'kps ai config [status|test|model...]' -> Configuration management
         - 'kps ai fix' / 'kps ai ?'             -> Auto error diagnosis from BlockRegistry
-        - 'kps ai commit'                       -> Git diff to conventional commit
         - 'kps ai explain [cmd]'                -> Command parameter dissection
         - 'kps ai scout'                        -> Codebase reconnaissance
         - 'kps ai do <nl...>'                   -> Natural language command generator
@@ -132,7 +129,6 @@ class AiPlugin(KapselPlugin):
             con.print("[bold white]Core Commands:[/]")
             con.print("  [bold #a855f7]kps ai <nl...>[/]               Generate shell command from natural language ([Enter] run, [Tab] copy)")
             con.print("  [bold #a855f7]kps ai fix[/] | [bold #a855f7]kps ai ?[/]         Auto-diagnose last failed command & propose 1-click fix")
-            con.print("  [bold #a855f7]kps ai commit[/]               Analyze git diff & generate Conventional Commit")
             con.print("  [bold #a855f7]kps ai explain [cmd][/]        Dissect command syntax, flags, and arguments step-by-step")
             con.print("  [bold #a855f7]kps ai scout[/]                Reconnaissance workspace architecture, tech stack & entrypoints")
             con.print("  [bold #a855f7]<cmd> | kps ai [prompt][/]     Process piped terminal output through AI in real-time\n")
@@ -233,11 +229,7 @@ class AiPlugin(KapselPlugin):
         if sub in ("fix", "?"):
             return action_fix(con=con, client=client, executor=executor)
 
-        # 6. Git diff to conventional commit
-        if sub == "commit":
-            return action_commit(con=con, client=client)
-
-        # 7. Command parameter dissection
+        # 6. Command parameter dissection
         if sub == "explain":
             cmd_text = " ".join(args[1:])
             return action_explain(command_text=cmd_text, con=con, client=client)

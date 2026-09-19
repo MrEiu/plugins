@@ -18,13 +18,35 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from prompt_toolkit.application import Application
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import Layout, Window
+from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.styles import Style
+
 from kapsel.core.plugin.base import KapselPlugin, PluginManifest
 from kapsel.core.plugin.context import PluginContext
 from kapsel.core.plugin.hooks import HookType
 from kapsel.storage.config import get_kapsel_dir
 from kapsel.ui.banner import ensure_utf8_io
 
+try:
+    from kapsel.ui.prompt import get_safe_output
+except ImportError:
+    get_safe_output = lambda: None
+
 ensure_utf8_io()
+
+PORTAL_PICKER_STYLE = Style.from_dict({
+    "portal.header": "bold #00f0ff",
+    "portal.cursor": "bold #10b981",
+    "portal.item_selected": "bold #ffffff bg:#334155",
+    "portal.item_unselected": "#cbd5e1",
+    "portal.depth": "dim #64748b",
+    "portal.best": "bold #10b981",
+    "portal.footer": "dim #94a3b8",
+    "portal.footer_key": "bold #38bdf8",
+})
 
 
 def _resolve_zoxide_executable() -> Optional[str]:
@@ -81,27 +103,81 @@ def _resolve_zoxide_executable() -> Optional[str]:
     return None
 
 
+def _resolve_fd_executable() -> Optional[str]:
+    """
+    Locates the fd executable (or fdfind on Debian/Ubuntu) across known system and sandbox paths:
+    1. System PATH ('fd' or 'fdfind')
+    2. Local Kapsel bin directory (~/.kapsel/bin/fd.exe or fd)
+    3. Scoop shims and apps directory
+    4. WinGet links directory
+    5. Cargo bin directory (~/.cargo/bin)
+    6. Common Unix locations (/usr/local/bin, /opt/homebrew/bin, ~/.local/bin, /usr/bin)
+    """
+    for binary_name in ("fd", "fdfind"):
+        p = shutil.which(binary_name)
+        if p:
+            return p
+
+    is_win = sys.platform == "win32"
+    exe_names = ["fd.exe"] if is_win else ["fd", "fdfind"]
+
+    for name in exe_names:
+        local_bin = get_kapsel_dir() / "bin" / name
+        if local_bin.exists():
+            return str(local_bin)
+
+    user_home = Path(os.environ.get("USERPROFILE" if is_win else "HOME", Path.home()))
+
+    if is_win:
+        candidates = [
+            user_home / "scoop" / "shims" / "fd.exe",
+            user_home / "scoop" / "apps" / "fd" / "current" / "fd.exe",
+            user_home / "AppData" / "Local" / "Microsoft" / "WinGet" / "Links" / "fd.exe",
+            user_home / ".cargo" / "bin" / "fd.exe",
+            user_home / ".local" / "bin" / "fd.exe",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+    else:
+        unix_candidates = [
+            Path("/opt/homebrew/bin/fd"),
+            Path("/usr/local/bin/fd"),
+            Path("/usr/bin/fd"),
+            Path("/usr/bin/fdfind"),
+            user_home / ".cargo" / "bin" / "fd",
+            user_home / ".local" / "bin" / "fd",
+            user_home / ".nix-profile" / "bin" / "fd",
+        ]
+        for candidate in unix_candidates:
+            if candidate.exists():
+                return str(candidate)
+
+    return None
+
+
 class PortalPlugin(KapselPlugin):
     """
-    Kapsel Portal Plugin: Smart Directory Teleportation powered by zoxide.
+    Kapsel Portal Plugin: Smart Directory Teleportation powered by zoxide and fd.
     Enables instant jumping via 'z <query>', 'portal <query>', and 'kps portal'.
     """
 
     manifest = PluginManifest(
         id="portal",
         name="Portal",
-        version="0.1.4",
-        description="Smart directory teleportation and directory-bound initialization hook (.portal) powered by zoxide.",
+        version="0.1.6",
+        description="Smart directory teleportation and workspace auto-init hooks powered by zoxide and fd.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/portal",
         min_kapsel_version="0.1.0",
-        tags=["zoxide", "cd", "navigation", "portal", "hook", "frecency", "workspace"],
+        tags=["zoxide", "fd", "cd", "navigation", "portal", "hook", "frecency", "workspace"],
     )
 
     def __init__(self) -> None:
         super().__init__()
         self.context: Optional[PluginContext] = None
         self._zoxide_bin: Optional[str] = None
+        self._fd_bin: Optional[str] = None
         self._last_recorded_cwd: Optional[str] = None
         self._cached_recent_dirs: List[str] = []
         self._cache_lock = threading.Lock()
@@ -110,6 +186,7 @@ class PortalPlugin(KapselPlugin):
     def on_load(self, context: PluginContext) -> None:
         self.context = context
         self._zoxide_bin = _resolve_zoxide_executable()
+        self._fd_bin = _resolve_fd_executable()
 
         # 1. Pre-execution filter: intercepts 'z <query>' and 'portal <query>'
         context.register_hook(HookType.FILTER_COMMAND, self.filter_command)
@@ -161,8 +238,8 @@ class PortalPlugin(KapselPlugin):
         if prefix not in ("z", "portal"):
             return False, raw_command
 
-        # If zoxide is not available on host, do not intercept
-        if not self._zoxide_bin:
+        # If neither zoxide nor fd is available, do not intercept
+        if not self._zoxide_bin and not self._fd_bin:
             return False, raw_command
 
         query = tokens[1].strip() if len(tokens) > 1 else ""
@@ -175,22 +252,41 @@ class PortalPlugin(KapselPlugin):
         if query in ("-", "..", "/", "\\", "~"):
             return True, f"cd {query}"
 
-        # If direct relative or absolute path exists, jump and record
+        # 1. Level 1: If direct relative or absolute path exists, jump and record
         query_path = Path(query).expanduser()
         if query_path.exists() and query_path.is_dir():
             resolved = str(query_path.resolve())
             self._async_add_directory(resolved)
             return True, f'cd "{resolved}"'
 
-        # Query zoxide for the best matching directory
+        # 2. Level 2 (STRICT PRIORITY): Query zoxide history database first!
         matched = self._query_zoxide_best(query)
         if matched:
             self._async_add_directory(matched)
             return True, f'cd "{matched}"'
 
-        # No match found: output warning in terminal and don't execute a broken command
+        # 3. Level 3 (SUPPLEMENTARY ONLY): Live filesystem discovery via fd when zoxide has no record
+        if self._fd_bin:
+            fd_matches = self._query_fd_directories(query, max_results=6)
+            if len(fd_matches) == 1:
+                target = fd_matches[0]
+                target_str = str(target)
+                self._async_add_directory(target_str)
+                con = Console(legacy_windows=False)
+                con.print(f"[dim]⚡ Discovered and teleported to [bold white]{target}[/] (via fd).[/]")
+                return True, f'cd "{target_str}"'
+            elif len(fd_matches) > 1:
+                chosen = self._prompt_multi_match_selection(query, fd_matches)
+                if chosen:
+                    target_str = str(chosen)
+                    self._async_add_directory(target_str)
+                    return True, f'cd "{target_str}"'
+                else:
+                    return True, ""
+
+        # No match found in history or filesystem
         con = Console(legacy_windows=False)
-        con.print(f"[bold #f43f5e]portal:[/] No matching directory found for '[white]{query}[/]' in database.")
+        con.print(f"[bold #f43f5e]portal:[/] No matching directory found for '[white]{query}[/]' in history or filesystem.")
         con.print("[dim]Tip: Use 'kps portal ls' to view registered paths or 'kps portal add <path>' to register.[/]\n")
         return True, ""
 
@@ -278,9 +374,6 @@ class PortalPlugin(KapselPlugin):
                     if sc.startswith(sub_prefix)
                 ]
 
-        if not self._zoxide_bin:
-            return []
-
         if remainder.endswith(" ") or not remainder:
             start_pos = 0
             query = ""
@@ -289,18 +382,44 @@ class PortalPlugin(KapselPlugin):
             start_pos = -len(curr_token)
             query = remainder.strip()
 
-        entries = self._list_zoxide_entries(query)
-
         candidates = []
-        for path_str in entries[:15]:
-            path_obj = Path(path_str)
-            basename = path_obj.name or path_str
-            candidates.append({
-                "text": basename,
-                "display": f"{basename}  [dim]({path_str})[/]",
-                "display_meta": "[portal]",
-                "start_position": start_pos,
-            })
+        seen_paths = set()
+
+        # 1. Historical Zoxide entries ALWAYS ranked first (highest priority)
+        if self._zoxide_bin:
+            entries = self._list_zoxide_entries(query)
+            for path_str in entries[:15]:
+                try:
+                    path_obj = Path(path_str)
+                    basename = path_obj.name or path_str
+                    seen_paths.add(str(path_obj.resolve()))
+                    candidates.append({
+                        "text": basename,
+                        "display": f"{basename}  [dim]({path_str})[/]",
+                        "display_meta": "🌀 zoxide",
+                        "start_position": start_pos,
+                    })
+                except Exception:
+                    pass
+
+        # 2. Supplementary live fd search candidates (appended after history)
+        if self._fd_bin and query and len(query) >= 2:
+            fd_dirs = self._query_fd_directories(query, max_results=8)
+            for fd_path in fd_dirs:
+                try:
+                    resolved_str = str(fd_path.resolve())
+                    if resolved_str not in seen_paths:
+                        seen_paths.add(resolved_str)
+                        basename = fd_path.name or str(fd_path)
+                        candidates.append({
+                            "text": basename,
+                            "display": f"{basename}  [dim]({fd_path})[/]",
+                            "display_meta": "🔍 fd",
+                            "start_position": start_pos,
+                        })
+                except Exception:
+                    pass
+
         return candidates
 
     def handle_portal(self, args: List[str], console: Optional[Console] = None) -> int:
@@ -505,17 +624,29 @@ class PortalPlugin(KapselPlugin):
 
         # Entry count
         entries = self._list_zoxide_entries("")
-        fzf_available = shutil.which("fzf") is not None
+
+        # fd status
+        if self._fd_bin:
+            try:
+                res_fd = subprocess.run([self._fd_bin, "--version"], capture_output=True, text=True, timeout=3)
+                fd_ver = res_fd.stdout.strip()
+            except Exception:
+                fd_ver = "Available"
+            fd_val = self._fd_bin
+        else:
+            fd_val = "[dim]Not installed (Supplementary, run 'kps install portal')[/]"
+            fd_ver = "[dim]N/A[/]"
 
         table = Table(title="[bold #00f0ff]🏥 Portal & zoxide Diagnostic[/]", border_style="#0891b2")
         table.add_column("Component", style="#00f0ff")
         table.add_column("Status / Value", style="white")
 
-        table.add_row("zoxide binary", self._zoxide_bin)
+        table.add_row("zoxide binary (history)", self._zoxide_bin or "[dim]Not found[/]")
         table.add_row("zoxide version", ver)
+        table.add_row("fd binary (live search)", fd_val)
+        table.add_row("fd version", fd_ver)
         table.add_row("Database path", data_dir)
         table.add_row("Tracked directories", f"{len(entries)} items")
-        table.add_row("FZF fuzzy finder", "[bold #10b981]Available[/]" if fzf_available else "[dim]Not installed (Optional)[/]")
         table.add_row("Kapsel Hook Status", "[bold #10b981]Active (Auto-learning enabled)[/]")
 
         con.print()
@@ -589,6 +720,219 @@ class PortalPlugin(KapselPlugin):
             pass
 
         return []
+
+    def _query_fd_directories(self, query: str, max_results: int = 10) -> List[Path]:
+        """
+        Executes fast live filesystem search via fd for directory matches.
+        Prioritizes:
+        1. Current working directory (or repository/project root)
+        2. User projects / home if not in deep workspace
+        Filters out .git, node_modules, build artifacts.
+        Sorts candidates by shortest depth and exact name matches.
+        """
+        if not self._fd_bin:
+            return []
+
+        clean_query = query.strip().strip("\"'")
+        if not clean_query:
+            return []
+
+        search_roots: List[Path] = [Path.cwd()]
+
+        # If current directory is inside a git repo, also search from git root if higher up
+        try:
+            curr = Path.cwd()
+            for parent in curr.parents:
+                if (parent / ".git").exists():
+                    if parent not in search_roots:
+                        search_roots.insert(0, parent)
+                    break
+        except Exception:
+            pass
+
+        results: List[Path] = []
+        seen = set()
+
+        for root in search_roots:
+            try:
+                cmd = [
+                    self._fd_bin,
+                    "--type", "d",
+                    "--hidden",
+                    "--exclude", ".git",
+                    "--exclude", "node_modules",
+                    "--exclude", ".venv",
+                    "--exclude", "venv",
+                    "--exclude", "target",
+                    "--max-depth", "4",
+                    clean_query,
+                    str(root),
+                ]
+                res = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=2.0,
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    for line in res.stdout.strip().splitlines():
+                        p_str = line.strip()
+                        if p_str:
+                            p = Path(p_str).resolve()
+                            if p.is_dir() and str(p) not in seen:
+                                seen.add(str(p))
+                                results.append(p)
+                                if len(results) >= max_results:
+                                    break
+            except Exception:
+                pass
+
+            if results:
+                break
+
+        # If still no results and query is a single word, search user home workspace with shallow depth
+        if not results and len(clean_query) >= 3 and not any(c in clean_query for c in ("/", "\\")):
+            user_home = Path.home()
+            for quick_root in [user_home / "Desktop", user_home / "Projects", user_home / "repos"]:
+                if quick_root.exists():
+                    try:
+                        cmd = [
+                            self._fd_bin,
+                            "--type", "d",
+                            "--hidden",
+                            "--exclude", ".git",
+                            "--exclude", "node_modules",
+                            "--exclude", ".venv",
+                            "--exclude", "venv",
+                            "--exclude", "target",
+                            "--max-depth", "3",
+                            clean_query,
+                            str(quick_root),
+                        ]
+                        res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1.5)
+                        if res.returncode == 0 and res.stdout.strip():
+                            for line in res.stdout.strip().splitlines():
+                                p_str = line.strip()
+                                if p_str:
+                                    p = Path(p_str).resolve()
+                                    if p.is_dir() and str(p) not in seen:
+                                        seen.add(str(p))
+                                        results.append(p)
+                                        if len(results) >= max_results:
+                                            break
+                    except Exception:
+                        pass
+                if results:
+                    break
+
+        def _sort_key(p: Path) -> Tuple[int, int]:
+            is_exact = 0 if p.name.lower() == clean_query.lower() else 1
+            depth = len(p.parts)
+            return (is_exact, depth)
+
+        results.sort(key=_sort_key)
+        return results[:max_results]
+
+    def _prompt_multi_match_selection(self, query: str, matches: List[Path]) -> Optional[Path]:
+        """
+        Presents an interactive prompt_toolkit arrow-key selection menu in terminal
+        when fd finds multiple matching directories.
+        Keys:
+          [Up / Down] Navigate cursor
+          [Enter]     Confirm and teleport
+          [Esc]       Cancel
+        No j, k, or q bindings per user specification.
+        """
+        if not matches:
+            return None
+
+        # Fallback to the best match in non-interactive / headless execution
+        if not sys.stdin.isatty():
+            return matches[0]
+
+        selected_idx = 0
+        cwd = Path.cwd()
+
+        def get_tokens() -> List[Tuple[str, str]]:
+            tokens: List[Tuple[str, str]] = [
+                ("class:portal.header", f"\n🌀 Portal found {len(matches)} matching directories for '{query}':\n"),
+            ]
+            for idx, p in enumerate(matches):
+                is_selected = (idx == selected_idx)
+                try:
+                    rel = p.relative_to(cwd)
+                    rel_str = f"./{rel}"
+                except Exception:
+                    rel_str = str(p)
+
+                depth_info = f"(depth: {len(p.parts)})"
+                best_tag = " [best match]" if idx == 0 else ""
+
+                if is_selected:
+                    tokens.append(("class:portal.cursor", " ❯ "))
+                    tokens.append(("class:portal.item_selected", f" 📁 {rel_str} "))
+                    tokens.append(("class:portal.depth", f"  {depth_info}"))
+                    if best_tag:
+                        tokens.append(("class:portal.best", f"{best_tag}"))
+                    tokens.append(("", "\n"))
+                else:
+                    tokens.append(("", "   "))
+                    tokens.append(("class:portal.item_unselected", f"📁 {rel_str}"))
+                    tokens.append(("class:portal.depth", f"  {depth_info}"))
+                    tokens.append(("", "\n"))
+
+            tokens.extend([
+                ("class:portal.footer", "\n "),
+                ("class:portal.footer_key", "[↑/↓]"),
+                ("class:portal.footer", " Select · "),
+                ("class:portal.footer_key", "[Enter]"),
+                ("class:portal.footer", " Teleport · "),
+                ("class:portal.footer_key", "[Esc]"),
+                ("class:portal.footer", " Cancel\n"),
+            ])
+            return tokens
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def _up(event: Any) -> None:
+            nonlocal selected_idx
+            selected_idx = (selected_idx - 1) % len(matches)
+            event.app.invalidate()
+
+        @kb.add("down")
+        def _down(event: Any) -> None:
+            nonlocal selected_idx
+            selected_idx = (selected_idx + 1) % len(matches)
+            event.app.invalidate()
+
+        @kb.add("enter")
+        def _enter(event: Any) -> None:
+            event.app.exit(result=matches[selected_idx])
+
+        @kb.add("escape")
+        @kb.add("c-c")
+        def _cancel(event: Any) -> None:
+            event.app.exit(result=None)
+
+        con = Console(legacy_windows=False)
+        try:
+            app = Application(
+                layout=Layout(Window(FormattedTextControl(get_tokens))),
+                key_bindings=kb,
+                style=PORTAL_PICKER_STYLE,
+                full_screen=False,
+                output=get_safe_output(),
+            )
+            chosen = app.run()
+            if chosen:
+                return chosen
+            con.print("[dim]Selection cancelled.[/]\n")
+            return None
+        except Exception:
+            return matches[0]
 
     def _handle_hook(self, args: List[str], con: Console) -> int:
         """

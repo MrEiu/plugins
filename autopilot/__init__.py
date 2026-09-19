@@ -1,6 +1,6 @@
 """
-Autopilot Plugin for Kapsel.
-Bridges Pueue to provide autonomous background task queuing, daemon management, and live logging.
+Autopilot (PM2 Process Manager) Plugin for Kapsel.
+Production process manager, cluster supervisor, and daemon orchestrator powered by PM2.
 All comments and descriptions are in English.
 """
 

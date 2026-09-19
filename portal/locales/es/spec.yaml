@@ -34,3 +34,30 @@ commands:
   description: Editar directamente la base de datos de zoxide
 - name: init
   description: Generar configuración de enlace de shell externo
+- name: hook
+  description: Gestionar enlaces de inicialización vinculados al directorio (.portal)
+  commands:
+  - name: status
+    aliases:
+    - cat
+    - show
+    description: Mostrar estado y comandos de .portal en el directorio actual
+  - name: init
+    aliases:
+    - create
+    - new
+    description: Crear una plantilla de enlace .portal en el directorio actual
+  - name: edit
+    aliases:
+    - open
+    description: Abrir .portal en un editor externo
+  - name: run
+    aliases:
+    - exec
+    description: Ejecutar los comandos de .portal inmediatamente
+  - name: rm
+    aliases:
+    - remove
+    - del
+    - delete
+    description: Eliminar el archivo .portal del directorio actual

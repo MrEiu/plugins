@@ -115,7 +115,7 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
             con.print("\n[bold #10b981]✨ AI setup complete![/] You can now use:")
             con.print("  [bold #00f0ff]kps ai <prompt>[/]     - Natural language to command")
             con.print("  [bold #00f0ff]kps ai fix[/]          - Auto-diagnose and fix last failed command")
-            con.print("  [bold #00f0ff]kps ai commit[/]       - Generate Git commit from diff\n")
+            con.print("  [bold #00f0ff]kps ai explain [cmd][/] - Dissect command flags and parameters\n")
             return 0
         else:
             con.print("[yellow]Notice: Model connected but returned empty response. Please verify settings.[/]\n")

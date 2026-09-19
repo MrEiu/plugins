@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-autopilot"
-version = "0.1.1"
-description = "Autonomous background task queue and daemon execution manager for Kapsel powered by Pueue."
+version = "0.2.0"
+description = "Production process manager and daemon supervisor for Kapsel powered by PM2."
 readme = "README.md"
 authors = [{ name = "MrEiu" }]
 license = { text = "MIT" }
-keywords = ["kapsel", "plugin", "autopilot", "pueue", "queue", "daemon", "cli"]
+keywords = ["kapsel", "plugin", "autopilot", "pm2", "process-manager", "daemon", "cli"]
 dependencies = [
     "rich>=13.0.0",
 ]
 
 [project.entry-points."kapsel.plugins"]
 autopilot = "plugins.autopilot:Plugin"
+ap = "plugins.autopilot:Plugin"
