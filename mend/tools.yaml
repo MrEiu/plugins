@@ -1,0 +1,3 @@
+# Kapsel Mend Plugin - Tool Dependencies
+# Mend uses built-in Python standard libraries and Kapsel core UI components.
+tools: {}

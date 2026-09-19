@@ -1,0 +1,53 @@
+tools:
+  zoxide:
+    name: "zoxide"
+    description: "Smarter cd command for your terminal"
+    bin: "zoxide"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "zoxide"
+          - type: "cargo"
+            pkg: "zoxide"
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "zoxide"
+          - type: "cargo"
+            pkg: "zoxide"
+      linux:
+        strategy:
+          - type: "script"
+            cmd: "curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh"
+          - type: "cargo"
+            pkg: "zoxide"
+
+  fd:
+    name: "fd"
+    description: "Simple, fast and user-friendly alternative to find"
+    bin: "fd"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "fd"
+          - type: "cargo"
+            pkg: "fd-find"
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "fd"
+          - type: "cargo"
+            pkg: "fd-find"
+      linux:
+        strategy:
+          - type: "os"
+            manager: "apt"
+            pkg: "fd-find"
+          - type: "cargo"
+            pkg: "fd-find"

@@ -6,6 +6,7 @@ and an independent persistent configuration file.
 All comments and descriptions are in English.
 """
 
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -20,6 +21,23 @@ from rich.panel import Panel
 from kapsel.core.plugin.base import KapselPlugin, PluginManifest
 from kapsel.core.plugin.context import PluginContext
 from kapsel.storage.config import get_kapsel_dir
+
+try:
+    from .streaming_search import concurrent_streaming_search, SearchItem
+    from .interactive import select_package_interactive
+    from .inspector import inspect_installed_package
+except ImportError:
+    from plugins.install.streaming_search import concurrent_streaming_search, SearchItem
+    from plugins.install.interactive import select_package_interactive
+    from plugins.install.inspector import inspect_installed_package
+
+try:
+    from kapsel.core.tools.registry import get_tool
+    from kapsel.core.tools.installer import install_tool
+except ImportError:
+    get_tool = None
+    install_tool = None
+
 
 
 # ------------------------------------------------------------------------------
@@ -188,9 +206,12 @@ def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = 
             subcmd_args.append(a)
 
     cmd = mpm_exec + global_flags + [subcmd] + subcmd_args
+    env = dict(os.environ)
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     try:
         # Stream process execution interactively to the terminal
-        result = subprocess.run(cmd)
+        result = subprocess.run(cmd, env=env)
         return result.returncode
     except Exception as e:
         con.print(f"[bold #f43f5e]Failed to execute mpm {subcmd}:[/] {e}")
@@ -207,7 +228,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.2.0",
+        version="0.2.1",
         description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
@@ -402,7 +423,7 @@ class InstallPlugin(KapselPlugin):
     # --------------------------------------------------------------------------
 
     def handle_install(self, args: List[str], console: Optional[Console] = None) -> int:
-        """Handles 'kps install' with subcommands: --order, --detect, --config."""
+        """Handles 'kps install' with subcommands: --order, --detect, --config, and post-install inspection."""
         con = console or Console(legacy_windows=False)
 
         # 1. Management Subcommands
@@ -425,8 +446,31 @@ class InstallPlugin(KapselPlugin):
             con.print("[dim]       kps install --detect  (rescan system managers)[/]\n")
             return 1
 
+        pkg_name = next((a for a in args if not a.startswith("-")), None)
+
+        # 2a. Check if tool is declared in Kapsel declarative tool registry (tools.yaml)
+        if pkg_name and get_tool and not any(a.startswith("--") for a in args):
+            tool_def = get_tool(pkg_name)
+            if tool_def:
+                con.print(f"[bold #00f0ff]🎯 Found '{pkg_name}' in Kapsel declarative tool registry.[/]")
+                con.print(f"[dim]Executing deterministic delivery strategy (origin: {tool_def.get('plugin', 'core')})...[/]")
+                ok = install_tool(pkg_name, console=con)
+                if ok:
+                    inspect_installed_package(pkg_name, manager="declarative (tools.yaml)", console=con)
+                    return 0
+                else:
+                    con.print(f"[yellow]Declarative installation failed. Falling back to package managers...[/]")
+
         forwarded_args = self._inject_priority_args(args)
-        return _run_mpm_command("install", forwarded_args, con)
+        ret = _run_mpm_command("install", forwarded_args, con)
+        if ret == 0 and pkg_name and not any(a in ("--dry-run", "-h", "--help") for a in args):
+            detected_mgr = "mpm"
+            for a in forwarded_args:
+                if a.startswith("--") and a[2:] in MANAGER_BINARIES:
+                    detected_mgr = a[2:]
+                    break
+            inspect_installed_package(pkg_name, manager=detected_mgr, console=con)
+        return ret
 
     def handle_update(self, args: List[str], console: Optional[Console] = None) -> int:
         """Handles 'kps update' with priority injection."""
@@ -435,14 +479,56 @@ class InstallPlugin(KapselPlugin):
         return _run_mpm_command("upgrade", forwarded_args, con)
 
     def handle_search(self, args: List[str], console: Optional[Console] = None) -> int:
-        """Handles 'kps search' with priority injection."""
+        """
+        Handles 'kps search' with concurrent multi-manager streaming search
+        and optional secondary interactive confirmation.
+        """
         con = console or Console(legacy_windows=False)
         if not args:
             con.print("[bold #f43f5e]Error:[/] Please specify a search query.")
-            con.print("[dim]Usage: kps search <query>[/]\n")
+            con.print("[dim]Usage: kps search <query> [options][/]\n")
             return 1
-        forwarded_args = self._inject_priority_args(args)
-        return _run_mpm_command("search", forwarded_args, con)
+
+        # Fallback to direct mpm search if raw/plain/columns flags specified
+        if any(a in ("--raw", "--plain", "--columns") for a in args):
+            forwarded_args = [a for a in args if a not in ("--raw", "--plain")]
+            forwarded_args = self._inject_priority_args(forwarded_args)
+            return _run_mpm_command("search", forwarded_args, con)
+
+        mpm_exec = _resolve_mpm_executable()
+        if not mpm_exec:
+            con.print("[bold #f43f5e]Error:[/] meta-package-manager (mpm) is not installed.")
+            return 1
+
+        query = " ".join([a for a in args if not a.startswith("-")])
+        if not query:
+            return _run_mpm_command("search", args, con)
+
+        active_managers = self.get_active_managers()
+        results = concurrent_streaming_search(
+            mpm_exec=mpm_exec,
+            managers=active_managers,
+            query=query,
+            console=con,
+        )
+
+        if not results:
+            con.print(f"[yellow]No packages matching '{query}' found across active managers.[/]\n")
+            return 0
+
+        # Secondary interactive confirmation if connected to interactive terminal
+        if sys.stdin.isatty():
+            con.print("[bold #00f0ff]💡 You can select a package from the search results to install it immediately:[/]")
+            selected = select_package_interactive(results, console=con)
+            if selected:
+                con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
+                install_args = [f"--{selected.manager}", selected.package_id]
+                ret = _run_mpm_command("install", install_args, con)
+                if ret == 0:
+                    inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
+                return ret
+
+        return 0
 
     def handle_sync(self, args: List[str], console: Optional[Console] = None) -> int:
         """

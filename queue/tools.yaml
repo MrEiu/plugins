@@ -1,0 +1,20 @@
+tools:
+  pueue:
+    name: "pueue"
+    description: "Manage your shell commands in a queue"
+    bin: "pueue"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "pueue"
+          - type: "cargo"
+            pkg: "pueue"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "pueue"
+          - type: "cargo"
+            pkg: "pueue"

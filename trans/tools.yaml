@@ -1,0 +1,37 @@
+tools:
+  fanyi:
+    name: "fanyi"
+    description: "Fast multi-engine translator CLI for Windows"
+    bin: "fanyi"
+    platforms:
+      windows:
+        strategy:
+          - type: "node"
+            manager: "npm"
+            pkg: "fanyi"
+            global: true
+      unix:
+        strategy:
+          - type: "node"
+            manager: "npm"
+            pkg: "fanyi"
+            global: true
+
+  translate-shell:
+    name: "translate-shell"
+    description: "Command-line translator powered by Google Translate, Bing, etc."
+    bin: "trans"
+    platforms:
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "translate-shell"
+      linux:
+        strategy:
+          - type: "os"
+            manager: "apt"
+            pkg: "translate-shell"
+          - type: "os"
+            manager: "brew"
+            pkg: "translate-shell"

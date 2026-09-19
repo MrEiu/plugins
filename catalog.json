@@ -26,9 +26,9 @@
     "changelog": "Interactive rule-based command typo correction."
   },
   "help": {
-    "version": "0.1.0",
-    "description": "Fast command cheat sheets and quick lookup powered by tealdeer (tldr).",
-    "changelog": "Fast offline and online command cheat sheet browser."
+    "version": "0.1.1",
+    "description": "Interactive multi-tool query & action router for command cheat sheets, ports, processes, DNS, HTTP, and system info.",
+    "changelog": "Upgraded from tldr-only client to interactive multi-tool query & action router with zero-friction smart auto-inference (ports, processes, DNS, HTTP, stat, locate, sysinfo)."
   },
   "init": {
     "version": "0.1.1",
@@ -36,9 +36,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "install": {
-    "version": "0.2.0",
-    "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
-    "changelog": "Added platform-adaptive package manager priority ordering."
+    "version": "0.2.1",
+    "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with concurrent streaming search, interactive confirmation, and post-install inspection.",
+    "changelog": "Implemented concurrent multi-manager streaming search with Rich Live dynamic updates, secondary interactive package selection, post-install inspection card, declarative tools.yaml integration, and fixed Windows GBK UTF-8 encoding crash."
   },
   "portal": {
     "version": "0.1.6",
@@ -89,6 +89,11 @@
     "version": "0.1.0",
     "description": "Lightweight zero-pollution file & folder version backup and interactive restoration CLI powered by GitKeep.",
     "changelog": "Initial release: zero-pollution centralized git backup storage, bk/backup command interceptor, and interactive TUI version restoration."
+  },
+  "mend": {
+    "version": "0.1.0",
+    "description": "Diagnostic self-healing health checker for plugin tool dependencies and interactive configuration cleaner.",
+    "changelog": "Initial release: 4-thread concurrent plugin dependency inspection with auto-fix, and interactive configuration/log/cache cleaner."
   }
 }
 

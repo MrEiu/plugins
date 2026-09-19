@@ -1,0 +1,33 @@
+tools:
+  pet:
+    name: "pet"
+    description: "Simple command-line snippet manager"
+    bin: "pet"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "pet"
+          - type: "os"
+            manager: "winget"
+            pkg: "knqyf263.pet"
+          - type: "binary"
+            url: "https://github.com/knqyf263/pet/releases/download/v1.0.1/pet_1.0.1_windows_amd64.tar.gz"
+            dest: "~/.kapsel/bin/"
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "pet"
+          - type: "binary"
+            url: "https://github.com/knqyf263/pet/releases/download/v1.0.1/pet_1.0.1_darwin_amd64.tar.gz"
+            dest: "~/.kapsel/bin/"
+      linux:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "pet"
+          - type: "binary"
+            url: "https://github.com/knqyf263/pet/releases/download/v1.0.1/pet_1.0.1_linux_amd64.tar.gz"
+            dest: "~/.kapsel/bin/"

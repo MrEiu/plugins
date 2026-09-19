@@ -1,0 +1,12 @@
+tools:
+  gitkeep-cli:
+    name: "gitkeep-cli"
+    description: "Zero-pollution folder version backup and snapshot restore CLI"
+    bin: "bk"
+    platforms:
+      all:
+        strategy:
+          - type: "node"
+            manager: "npm"
+            pkg: "gitkeep-cli"
+            global: true

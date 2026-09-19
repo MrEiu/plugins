@@ -1,0 +1,12 @@
+tools:
+  pm2:
+    name: "pm2"
+    description: "Production Process Manager for Node.js"
+    bin: "pm2"
+    platforms:
+      all:
+        strategy:
+          - type: "node"
+            manager: "npm"
+            pkg: "pm2"
+            global: true

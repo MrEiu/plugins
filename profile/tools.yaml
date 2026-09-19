@@ -1,0 +1,30 @@
+tools:
+  chezmoi:
+    name: "chezmoi"
+    description: "Manage your dotfiles across multiple diverse machines"
+    bin: "chezmoi"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "chezmoi"
+          - type: "os"
+            manager: "winget"
+            pkg: "twpayne.chezmoi"
+          - type: "script"
+            cmd: "irm https://get.chezmoi.io/ps1 | iex"
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "chezmoi"
+          - type: "script"
+            cmd: "sh -c \"$(curl -fsLS get.chezmoi.io)\""
+      linux:
+        strategy:
+          - type: "script"
+            cmd: "sh -c \"$(curl -fsLS get.chezmoi.io)\""
+          - type: "os"
+            manager: "brew"
+            pkg: "chezmoi"

@@ -1,64 +1,89 @@
-# Help Plugin for Kapsel
+# Help Plugin for Kapsel 📖⚡
 
-Fast command cheat sheet lookup plugin for the **Kapsel** shell, powered by [tealdeer](https://github.com/tealdeer-rs/tealdeer) (a blazing fast implementation of `tldr` in Rust).
+Interactive multi-tool query & action workflow router for Kapsel shell.
+Features zero-friction smart auto-inference, allowing you to run `kps help <anything>` to inspect ports, processes, DNS, HTTP, system specs, and command cheat sheets.
 
-> **Important Distinction**:
-> * `kapsel help` is Kapsel's internal system command manual (managing `status`, `config`, `add`, `datadir`).
-> * `kps help` is this feature plugin providing instant cheat sheets and practical examples for thousands of CLI commands.
+---
 
-## Installation
+## 🚀 Smart Auto-Inference (`kps help <query>`)
 
-Add and enable the plugin via Kapsel system command:
+You don't need to memorize distinct subcommands—simply pass your target directly to `kps help`:
 
+| Target Query | Example | Auto-Routed Action |
+|---|---|---|
+| **Port number** (`<n>` or `:<n>`) | `kps help 8080` / `kps help :3000` | Inspect port listeners & kill occupying process |
+| **URL** (`http://` or `https://`) | `kps help https://api.github.com` | Execute HTTP request, retry & save response |
+| **Domain or IP** | `kps help github.com` / `kps help 8.8.8.8` | Resolve DNS, probe HTTP status & reverse PTR |
+| **System keywords** | `kps help sys` / `kps help os` / `kps help cpu` | Display hardware specs, memory & OS summary |
+| **Process keywords / PID** | `kps help ps` / `kps help pid:1234` | View active process table with interactive Kill menu |
+| **Command name** | `kps help tar` / `kps help curl` | View cheat sheet + copy/run examples + locate binary |
+
+---
+
+## ⚡ Explicit Subcommands & Workflows
+
+### 1. Port Occupancy & Process Termination
+Inspect who is listening on a port and terminate it immediately:
 ```bash
-kapsel add help
+# Check port 8080
+kps help port 8080
+
+# Kill process listening on port 8080 directly
+kps help port 8080 --kill
 ```
 
-*(Automatically installs `tealdeer` standalone static binary and initializes the local cheat sheet cache).*
+### 2. Process Manager & Termination
+View running processes and terminate unwanted PIDs:
+```bash
+# Filter processes by name
+kps help ps node
 
-## Usage
+# Kill by PID directly
+kps help kill 14208
+```
 
-### 1. Command Quick Lookup (`kps help <command...>`)
-Lookup practical examples and syntax for any tool:
-
+### 3. Command Usage & Example Execution
+Lookup high-frequency examples, copy to clipboard (`[Enter]`), or execute directly (`[x]`):
 ```bash
 kps help tar
-kps help curl
 kps help git commit
-kps help docker run
+kps help docker
 ```
 
-### 2. Update Cheat Sheet Cache (`kps help --update`)
-Keep your local copy of thousands of command pages updated from GitHub:
-
+### 4. Binary Locator (`which` / `where`)
+Locate the absolute executable path across system PATH, shims, and package managers:
 ```bash
-kps help --update
-# or shorthand
-kps help -u
+kps help which python
+kps help which node
 ```
 
-### 3. List Available Pages (`kps help --list`)
-List all available command documentation pages:
-
+### 5. DNS & Network Domain Resolver
+Resolve IPv4/IPv6 addresses, probe HTTP connectivity, and reverse PTR lookups:
 ```bash
-kps help --list
-# or shorthand
-kps help -l
+kps help dns github.com
+kps help dns 1.1.1.1
 ```
 
-### 4. Platform-Specific Cheat Sheets (`kps help -p <os>`)
-Query cheat sheets tailored for specific operating systems:
-
+### 6. HTTP Client & Response Saver
+Send HTTP requests with formatted JSON syntax highlighting:
 ```bash
-kps help -p linux iptables
-kps help -p macos brew
-kps help -p windows netstat
+kps help http https://httpbin.org/get
 ```
 
-## Interactive Auto-Completion
+### 7. HTTP Latency Waterfall (`stat`)
+Measure DNS, TCP handshake, TLS negotiation, and TTFB latency phases:
+```bash
+kps help stat https://www.google.com
+```
 
-The plugin hooks into Kapsel's completion engine (`PROVIDE_COMPLETIONS`). Typing `kps help ` followed by letters dynamically provides matching command names from your local cache with instant response time.
+### 8. System Specification Card (`sys`)
+View hardware architecture, CPU cores, memory status, and OS build:
+```bash
+kps help sys
+```
 
-## License
-
-MIT License.
+### 9. Companion CLI Tools Checker (`install`)
+Check installed tools and get recommended installation commands:
+```bash
+kps help install
+```

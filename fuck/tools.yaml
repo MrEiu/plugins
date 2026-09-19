@@ -1,0 +1,11 @@
+tools:
+  thefuck:
+    name: "thefuck"
+    description: "Magnificent app which corrects your previous console command"
+    bin: "thefuck"
+    platforms:
+      all:
+        strategy:
+          - type: "python"
+            manager: "pip"
+            pkg: "thefuck"

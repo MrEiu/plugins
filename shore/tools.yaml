@@ -1,0 +1,36 @@
+tools:
+  chsrc:
+    name: "chsrc"
+    description: "Fast intelligent mirror source switcher"
+    bin: "chsrc"
+    platforms:
+      windows:
+        strategy:
+          - type: "script"
+            cmd: "irm https://chsrc.run/win | iex"
+          - type: "os"
+            manager: "scoop"
+            pkg: "chsrc"
+          - type: "os"
+            manager: "winget"
+            pkg: "RubyMetric.chsrc"
+          - type: "binary"
+            url: "https://github.com/RubyMetric/chsrc/releases/latest/download/chsrc-windows-x64.exe"
+            dest: "~/.kapsel/bin/chsrc.exe"
+      macos:
+        strategy:
+          - type: "script"
+            cmd: "curl -fsSL https://chsrc.run | bash"
+          - type: "os"
+            manager: "brew"
+            pkg: "chsrc"
+          - type: "binary"
+            url: "https://github.com/RubyMetric/chsrc/releases/latest/download/chsrc-macos-x64"
+            dest: "~/.kapsel/bin/chsrc"
+      linux:
+        strategy:
+          - type: "script"
+            cmd: "curl -fsSL https://chsrc.run | bash"
+          - type: "binary"
+            url: "https://github.com/RubyMetric/chsrc/releases/latest/download/chsrc-linux-x64"
+            dest: "~/.kapsel/bin/chsrc"

@@ -1,0 +1,106 @@
+tools:
+  tealdeer:
+    name: "tealdeer"
+    description: "Fast tldr implementation in Rust"
+    bin: "tldr"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "tealdeer"
+          - type: "binary"
+            url: "https://github.com/tealdeer-rs/tealdeer/releases/download/v1.9.0/tealdeer-windows-x86_64-msvc.exe"
+            dest: "~/.kapsel/bin/tldr.exe"
+          - type: "cargo"
+            pkg: "tealdeer"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "tealdeer"
+          - type: "cargo"
+            pkg: "tealdeer"
+
+  procs:
+    name: "procs"
+    description: "Modern replacement for ps written in Rust"
+    bin: "procs"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "procs"
+          - type: "cargo"
+            pkg: "procs"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "procs"
+          - type: "cargo"
+            pkg: "procs"
+
+  xh:
+    name: "xh"
+    description: "Friendly and fast tool for sending HTTP requests"
+    bin: "xh"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "xh"
+          - type: "cargo"
+            pkg: "xh"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "xh"
+          - type: "cargo"
+            pkg: "xh"
+
+  doggo:
+    name: "doggo"
+    description: "Human-friendly DNS client for the terminal"
+    bin: "doggo"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "doggo"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "doggo"
+
+  fastfetch:
+    name: "fastfetch"
+    description: "Fast, highly customizable system information tool"
+    bin: "fastfetch"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "fastfetch"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "fastfetch"
+
+  httpstat:
+    name: "httpstat"
+    description: "HTTP latency waterfall visualizer"
+    bin: "httpstat"
+    platforms:
+      all:
+        strategy:
+          - type: "python"
+            manager: "pip"
+            pkg: "httpstat"
