@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://carapace.sh/schemas/command.json
+name: kssh
+description: Ergonomic SSH companion with portable host history and in-session operations
+standalone: true
+flags:
+  -p, --port=: SSH remote port (default 22)
+  -n, --name=: Custom alias for host entry
+  -i, --identity=: Path to SSH private key
+  -h, --help: Show help information
+commands:
+  - name: ls
+    aliases:
+      - list
+    description: List recently connected hosts (capped at 4)
+  - name: rm
+    aliases:
+      - remove
+      - del
+    description: Remove a host from saved history by number or alias
+    flags:
+      -h, --help: Show help information
+  - name: up
+    aliases:
+      - upload
+    description: Quick file upload to remote destination
+    flags:
+      -h, --help: Show help information
+  - name: port
+    aliases:
+      - tunnel
+    description: Establish background port forwarding tunnel
+    flags:
+      -h, --help: Show help information

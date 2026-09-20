@@ -40,6 +40,11 @@
     "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with concurrent streaming search, interactive confirmation, and post-install inspection.",
     "changelog": "Upgraded to fully adaptive prompt_toolkit layout: dynamically responsive columns, guaranteed 100% closed borders, and zero text overflow."
   },
+  "kssh": {
+    "version": "0.1.0",
+    "description": "Ergonomic SSH companion with portable host history, in-session Alt+S hotkey menu (file upload to remote PWD with collision prompts & bidirectional port forwarding), and transparent signal passthrough.",
+    "changelog": "Initial release: compact 4-host history picker, in-session Alt+S hotkey menu, upload to remote PWD with collision prompts, bidirectional port forwarding (default remote->local, 'r' for local->remote), and seamless terminal/signal passthrough."
+  },
   "portal": {
     "version": "0.1.6",
     "description": "Smart directory teleportation and workspace navigator powered by zoxide and fd.",
