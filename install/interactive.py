@@ -1,19 +1,19 @@
 """
 Interactive Package Confirmation Selector for Kapsel Install Plugin.
-Presents a unified, grouped selection menu (top 3 packages per manager by default),
-with interactive expansion/collapsing, arrow-key navigation, and secondary confirmation.
-Supports live streaming search where results appear dynamically as found,
-allowing immediate selection without waiting for all managers to complete.
+Renders a unified, complete framed rounded card (Unified Framed Panel)
+with strict column alignment, top-3 candidates per search provider,
+and dynamic live expansion/collapsing.
 
 All comments and docstrings are in English.
 """
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+import re
+import shutil
 import sys
 import threading
-import time
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from rich.console import Console
 
@@ -33,6 +33,188 @@ class ToggleRow:
     hidden_count: int
 
 
+def parse_semver(ver_str: Optional[str]) -> Tuple[int, ...]:
+    """Parses version string into numeric tuple for semver ranking."""
+    if not ver_str:
+        return (0, 0, 0)
+    nums = [int(n) for n in re.findall(r"\d+", str(ver_str))]
+    return tuple(nums[:3]) if nums else (0, 0, 0)
+
+
+def rank_manager_candidates(items: List[SearchItem], query: str) -> List[SearchItem]:
+    """
+    Ranks candidates within a manager:
+    Prioritizes exact name matches, modern semver (>= 1.0.0), and token matches over stale 0.x crates.
+    """
+    q = query.lower()
+
+    def sort_key(it: SearchItem):
+        pid = it.package_id.lower()
+        exact = (pid == q)
+        token_match = (f"-{q}" in pid) or (f"{q}-" in pid) or pid.startswith(q) or pid.endswith(q)
+        ver = parse_semver(it.version)
+        is_modern = 1 if ver >= (1, 0, 0) else 0
+
+        # Tier 3: exact match with modern version (>= 1.0.0)
+        # Tier 2: token/prefix/suffix match with modern version (e.g. du-dust v1.2.6)
+        # Tier 1: exact match but ancient version (< 1.0.0)
+        # Tier 0: partial/loose match
+        if exact and is_modern:
+            tier = 3
+        elif token_match and is_modern:
+            tier = 2
+        elif exact:
+            tier = 1
+        else:
+            tier = 0
+
+        len_diff = abs(len(pid) - len(q))
+
+        return (
+            1 if it.is_recommended else 0,
+            tier,
+            -len_diff,
+            ver,
+            it.priority,
+        )
+
+    return sorted(items, key=sort_key, reverse=True)
+
+
+def build_card_formatted_text(
+    query: str,
+    ordered_managers: List[str],
+    grouped: Dict[str, List[SearchItem]],
+    expanded_managers: Set[str],
+    visible_rows: List[Union[ItemRow, ToggleRow]],
+    selected_idx: int,
+    in_progress: Optional[Set[str]] = None,
+    completed: Optional[Dict[str, int]] = None,
+) -> List[Tuple[str, str]]:
+    """
+    Constructs a perfectly aligned, unified rounded card panel (Claude/Gum style).
+    All rows maintain the exact same character width, preventing border misalignments.
+    """
+    lines: List[Tuple[str, str]] = []
+    term_cols = shutil.get_terminal_size((84, 24)).columns
+    box_width = min(max(78, term_cols - 4), 92)
+
+    # 1. Top border with title and scanning status
+    if in_progress:
+        status_text = f"Searching ({len(in_progress)} active)"
+    elif completed is not None:
+        status_text = f"Scan complete ({sum(completed.values())} found)"
+    else:
+        status_text = f"Found {len(visible_rows)} candidates"
+
+    title_part = f"╭─ 📦 Package Search: '{query}' [{status_text}] "
+    rem_top = max(2, box_width - len(title_part) - 1)
+    lines.append(("class:border", title_part + "─" * rem_top + "╮\n"))
+
+    empty_inner = "│" + " " * (box_width - 2) + "│\n"
+    lines.append(("class:border", empty_inner))
+
+    # Empty state placeholder
+    if not visible_rows:
+        if in_progress:
+            scanning_names = ", ".join(sorted(in_progress))
+            hint = f" Scanning registries in background: {scanning_names}..."
+            rem_h = max(0, box_width - len(hint) - 3)
+            lines.append(("class:border", "│"))
+            lines.append(("class:scanning", hint + " " * rem_h))
+            lines.append(("class:border", " │\n"))
+            lines.append(("class:border", empty_inner))
+            lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
+            lines.append(("class:help", " [Esc/q] Cancel\n"))
+            return lines
+        else:
+            no_match = f" No packages found matching '{query}' across active managers."
+            rem_nm = max(0, box_width - len(no_match) - 3)
+            lines.append(("class:border", "│"))
+            lines.append(("class:warn", no_match + " " * rem_nm))
+            lines.append(("class:border", " │\n"))
+            lines.append(("class:border", empty_inner))
+            lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
+            lines.append(("class:help", " [Esc/q] Cancel\n"))
+            return lines
+
+    current_mgr = None
+    first_section = True
+
+    for i, row in enumerate(visible_rows):
+        is_cur = (i == selected_idx)
+        cursor = " ❯ " if is_cur else "   "
+
+        # Manager group header inside card
+        if row.manager != current_mgr:
+            if not first_section:
+                lines.append(("class:border", empty_inner))
+            first_section = False
+
+            current_mgr = row.manager
+            total_in_mgr = len(grouped.get(current_mgr, []))
+            expand_label = "(expanded)" if current_mgr in expanded_managers else f"({min(3, total_in_mgr)}/{total_in_mgr} shown)"
+
+            hdr_text = f"   ● [{current_mgr.upper()}] {expand_label}"
+            rem_hdr = max(0, box_width - len(hdr_text) - 2)
+
+            lines.append(("class:border", "│"))
+            lines.append(("class:mgr_header", hdr_text))
+            lines.append(("class:border", " " * rem_hdr + "│\n"))
+
+        # Candidate item row
+        if isinstance(row, ItemRow):
+            it = row.item
+            rec_tag = "[★ BEST]" if it.is_recommended else ""
+            warn_tag = "(⚠ Python)" if (it.manager == "pip" and not it.is_recommended) else ""
+            badge_str = rec_tag or warn_tag
+            ver_str = f"v{it.version}" if it.version else ""
+
+            pkg_col = f"{it.package_id:<22}"[:22]
+            ver_col = f"{ver_str:<10}"[:10]
+            badge_col = f"{badge_str:<10}"[:10]
+
+            # Remaining width allocated for description
+            fixed_len = 1 + 3 + 22 + 10 + 10 + 2
+            rem_desc = max(10, box_width - fixed_len)
+
+            raw_desc = (it.description or "").strip()
+            if len(raw_desc) > rem_desc:
+                desc_col = raw_desc[: rem_desc - 3] + "..."
+            else:
+                desc_col = raw_desc
+            desc_col = f"{desc_col:<{rem_desc}}"
+
+            lines.append(("class:border", "│"))
+            row_style = "class:selected" if is_cur else "class:normal"
+            lines.append((row_style, f"{cursor}{pkg_col}{ver_col}{badge_col}{desc_col} "))
+            lines.append(("class:border", "│\n"))
+
+        # Expand / collapse toggle row
+        elif isinstance(row, ToggleRow):
+            if row.is_expanded:
+                tog_text = f"▾ [Collapse {row.manager} to top 3]"
+            else:
+                tog_text = f"▸ [+ {row.hidden_count} more from {row.manager}] (Press Enter or 'e' to expand)"
+
+            fixed_len = 1 + 3 + 2
+            rem_tog = max(10, box_width - fixed_len)
+            tog_col = f"{tog_text:<{rem_tog}}"
+
+            lines.append(("class:border", "│"))
+            tog_style = "class:selected_toggle" if is_cur else "class:toggle"
+            lines.append((tog_style, f"{cursor}{tog_col} "))
+            lines.append(("class:border", "│\n"))
+
+    # Bottom border
+    lines.append(("class:border", empty_inner))
+    lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
+
+    # Help footer
+    lines.append(("class:help", "  [↑/↓] Navigate  |  [Enter] Confirm/Expand  |  [e] Toggle Expand  |  [Esc/q] Cancel\n"))
+    return lines
+
+
 def search_and_select_interactive(
     mpm_exec: List[str],
     managers: List[str],
@@ -41,9 +223,8 @@ def search_and_select_interactive(
     timeout_per_manager: int = 35,
 ) -> Optional[SearchItem]:
     """
-    Initiates concurrent multi-manager search and immediately opens the interactive UI.
-    Results stream into the menu as soon as each manager finishes, allowing the user
-    to immediately select and install without waiting for all managers to complete.
+    Initiates concurrent multi-manager search and immediately renders the unified card panel.
+    Results stream into the card as soon as each manager finishes, allowing immediate selection.
     """
     con = console or Console(legacy_windows=False)
     if not managers:
@@ -51,12 +232,9 @@ def search_and_select_interactive(
         return None
 
     if not sys.stdin.isatty():
-        # Fallback to streaming search in non-interactive / piped environments
         from .streaming_search import concurrent_streaming_search
         results = concurrent_streaming_search(mpm_exec, managers, query, con)
-        if not results:
-            return None
-        return results[0]
+        return results[0] if results else None
 
     try:
         from prompt_toolkit.application import Application
@@ -89,13 +267,7 @@ def search_and_select_interactive(
             for mgr in ordered_managers:
                 if mgr not in grouped:
                     continue
-                mgr_items = grouped[mgr]
-                # Sort exact match and priority first
-                mgr_items = sorted(
-                    mgr_items,
-                    key=lambda x: (1 if x.package_id.lower() == query.lower() else 0, x.priority),
-                    reverse=True,
-                )
+                mgr_items = rank_manager_candidates(grouped[mgr], query)
 
                 if not has_found_recommended and mgr_items:
                     top_it = mgr_items[0]
@@ -125,7 +297,6 @@ def search_and_select_interactive(
                 except Exception:
                     pass
 
-        # Background worker for concurrent manager search
         def _search_worker(mgr_id: str):
             nonlocal selected_idx
             try:
@@ -150,55 +321,16 @@ def search_and_select_interactive(
 
         def get_menu_text():
             with lock:
-                lines = []
-                # Header with live streaming status
-                if in_progress:
-                    scanning_mgrs = ", ".join(sorted(in_progress))
-                    lines.append(("class:scanning", f"\n  ⚡ Searching registries ({len(in_progress)} scanning: {scanning_mgrs})...\n"))
-                    lines.append(("class:hint", "  💡 Select any result immediately with [Enter] without waiting for scan to finish.\n\n"))
-                else:
-                    total_found = sum(len(v) for v in grouped.values())
-                    lines.append(("class:done", f"\n  ✔ All {len(completed)} managers scanned (Found {total_found} packages total).\n\n"))
-
-                if not visible_rows:
-                    if in_progress:
-                        lines.append(("class:dim", "   Scanning package registries in background... Results will appear here instantly.\n"))
-                    else:
-                        lines.append(("class:warn", f"   No packages found matching '{query}'.\n"))
-                    return lines
-
-                current_mgr = None
-                for i, row in enumerate(visible_rows):
-                    is_cur = (i == selected_idx)
-                    cursor = " ❯ " if is_cur else "   "
-
-                    if row.manager != current_mgr:
-                        current_mgr = row.manager
-                        total_count = len(grouped.get(current_mgr, []))
-                        expand_status = "(expanded)" if current_mgr in expanded_managers else f"({min(3, total_count)}/{total_count} shown)"
-                        header_line = f"  ╭─ 📦 [{current_mgr.upper()}] {expand_status} ──────────────────────────────────────\n"
-                        lines.append(("class:header", header_line))
-
-                    if isinstance(row, ItemRow):
-                        it = row.item
-                        rec_tag = " [★ BEST]" if it.is_recommended else ""
-                        warn_tag = " (⚠ Python Package)" if (it.manager == "pip" and not it.is_recommended) else ""
-                        ver = f"v{it.version}" if it.version else ""
-                        desc = f" - {it.description[:42]}..." if it.description else ""
-                        row_str = f"{cursor}{it.package_id:<26} {ver:<10}{rec_tag}{warn_tag}{desc}\n"
-                        style_class = "class:selected" if is_cur else "class:normal"
-                        lines.append((style_class, row_str))
-
-                    elif isinstance(row, ToggleRow):
-                        if row.is_expanded:
-                            toggle_str = f"{cursor} ▾ [Collapse {row.manager} to top 3]\n"
-                        else:
-                            toggle_str = f"{cursor} ▸ [+ {row.hidden_count} more from {row.manager}] (Press Enter or 'e' to expand)\n"
-                        style_class = "class:selected_toggle" if is_cur else "class:toggle"
-                        lines.append((style_class, toggle_str))
-
-                lines.append(("\nclass:help", "  [↑/↓] Navigate  |  [Enter] Confirm/Expand  |  [e] Toggle Expand  |  [Esc/q] Cancel\n"))
-                return lines
+                return build_card_formatted_text(
+                    query=query,
+                    ordered_managers=ordered_managers,
+                    grouped=grouped,
+                    expanded_managers=expanded_managers,
+                    visible_rows=visible_rows,
+                    selected_idx=selected_idx,
+                    in_progress=in_progress,
+                    completed=completed,
+                )
 
         kb = KeyBindings()
 
@@ -264,16 +396,14 @@ def search_and_select_interactive(
             event.app.exit()
 
         style = Style.from_dict({
-            "scanning": "bold fg:#00f0ff",
-            "done": "bold fg:#10b981",
-            "hint": "dim italic fg:#38bdf8",
-            "dim": "dim fg:#64748b",
-            "warn": "italic fg:#f59e0b",
-            "header": "bold fg:#38bdf8",
+            "border": "fg:#38bdf8",
+            "mgr_header": "bold fg:#00f0ff",
             "selected": "bold fg:#00f0ff bg:#1e293b",
-            "normal": "fg:#e2e8f0",
+            "normal": "fg:#f1f5f9",
             "selected_toggle": "bold fg:#f59e0b bg:#1e293b",
             "toggle": "italic fg:#f59e0b",
+            "scanning": "bold fg:#00f0ff",
+            "warn": "italic fg:#f59e0b",
             "help": "dim fg:#94a3b8",
         })
 
@@ -281,14 +411,12 @@ def search_and_select_interactive(
         app = Application(layout=layout, key_bindings=kb, style=style, full_screen=False)
         app.run()
 
-        # Stop worker dispatch
         is_running = False
         executor.shutdown(wait=False)
 
         return result[0]
 
     except Exception:
-        # Fallback to streaming search and numeric menu
         from .streaming_search import concurrent_streaming_search
         results = concurrent_streaming_search(mpm_exec, managers, query, con)
         return select_package_interactive(results, con)
@@ -299,21 +427,18 @@ def select_package_interactive(
     console: Optional[Console] = None,
 ) -> Optional[SearchItem]:
     """
-    Presents an interactive menu to let the user select and confirm the exact package
+    Presents the unified card panel to let the user select and confirm a package
     from an already fetched list of candidate SearchItems.
     """
     con = console or Console(legacy_windows=False)
-
     if not candidates:
         con.print("[yellow]No packages available to select.[/]")
         return None
 
-    # Group items by manager
     grouped: Dict[str, List[SearchItem]] = {}
     for item in candidates:
         grouped.setdefault(item.manager, []).append(item)
 
-    # Order managers by platform priority weight
     ordered_managers = sorted(grouped.keys(), key=get_manager_weight, reverse=True)
 
     if not sys.stdin.isatty():
@@ -331,12 +456,13 @@ def select_package_interactive(
         visible_rows: List[Union[ItemRow, ToggleRow]] = []
         selected_idx = 0
         result: List[Optional[SearchItem]] = [None]
+        query = candidates[0].package_id if candidates else "package"
 
         def rebuild_visible_rows():
             nonlocal visible_rows
             visible_rows = []
             for mgr in ordered_managers:
-                mgr_items = grouped[mgr]
+                mgr_items = rank_manager_candidates(grouped[mgr], query)
                 if mgr in expanded_managers:
                     for it in mgr_items:
                         visible_rows.append(ItemRow(item=it, manager=mgr))
@@ -351,40 +477,14 @@ def select_package_interactive(
         rebuild_visible_rows()
 
         def get_menu_text():
-            lines = []
-            current_mgr = None
-
-            for i, row in enumerate(visible_rows):
-                is_cur = (i == selected_idx)
-                cursor = " ❯ " if is_cur else "   "
-
-                if row.manager != current_mgr:
-                    current_mgr = row.manager
-                    total_count = len(grouped[current_mgr])
-                    expand_status = "(expanded)" if current_mgr in expanded_managers else f"({min(3, total_count)}/{total_count} shown)"
-                    header_line = f"\n  ╭─ 📦 [{current_mgr.upper()}] {expand_status} ──────────────────────────────────────\n"
-                    lines.append(("class:header", header_line))
-
-                if isinstance(row, ItemRow):
-                    it = row.item
-                    rec_tag = " [★ BEST]" if it.is_recommended else ""
-                    warn_tag = " (⚠ Python Package)" if (it.manager == "pip" and not it.is_recommended) else ""
-                    ver = f"v{it.version}" if it.version else ""
-                    desc = f" - {it.description[:42]}..." if it.description else ""
-                    row_str = f"{cursor}{it.package_id:<26} {ver:<10}{rec_tag}{warn_tag}{desc}\n"
-                    style_class = "class:selected" if is_cur else "class:normal"
-                    lines.append((style_class, row_str))
-
-                elif isinstance(row, ToggleRow):
-                    if row.is_expanded:
-                        toggle_str = f"{cursor} ▾ [Collapse {row.manager} to top 3]\n"
-                    else:
-                        toggle_str = f"{cursor} ▸ [+ {row.hidden_count} more from {row.manager}] (Press Enter or 'e' to expand)\n"
-                    style_class = "class:selected_toggle" if is_cur else "class:toggle"
-                    lines.append((style_class, toggle_str))
-
-            lines.append(("\nclass:help", "  [↑/↓] Navigate  |  [Enter] Confirm/Expand  |  [e] Toggle Expand  |  [Esc/q] Cancel\n"))
-            return lines
+            return build_card_formatted_text(
+                query=query,
+                ordered_managers=ordered_managers,
+                grouped=grouped,
+                expanded_managers=expanded_managers,
+                visible_rows=visible_rows,
+                selected_idx=selected_idx,
+            )
 
         kb = KeyBindings()
 
@@ -440,11 +540,13 @@ def select_package_interactive(
             event.app.exit()
 
         style = Style.from_dict({
-            "header": "bold fg:#38bdf8",
+            "border": "fg:#38bdf8",
+            "mgr_header": "bold fg:#00f0ff",
             "selected": "bold fg:#00f0ff bg:#1e293b",
-            "normal": "fg:#e2e8f0",
+            "normal": "fg:#f1f5f9",
             "selected_toggle": "bold fg:#f59e0b bg:#1e293b",
             "toggle": "italic fg:#f59e0b",
+            "warn": "italic fg:#f59e0b",
             "help": "dim fg:#94a3b8",
         })
 
@@ -463,11 +565,7 @@ def _numeric_selection_fallback(
     second_arg: Any = None,
     third_arg: Optional[Console] = None,
 ) -> Optional[SearchItem]:
-    """
-    Fallback interactive prompt using plain terminal input.
-    Accepts either (candidates: List[SearchItem], con: Optional[Console])
-    or (ordered_managers: List[str], grouped: Dict[str, List[SearchItem]], con: Console).
-    """
+    """Fallback interactive prompt using plain terminal input."""
     if isinstance(first_arg, list) and first_arg and isinstance(first_arg[0], SearchItem):
         candidates: List[SearchItem] = first_arg
         con: Console = second_arg or Console(legacy_windows=False)
