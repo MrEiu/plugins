@@ -320,19 +320,34 @@ def select_two_column_interactive(
 def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
     """
     Runs an interactive terminal wizard to configure an AI provider and models.
-    Zero static preset models are used. Dynamically probes endpoint with error alerts.
+    Supports reading and preserving existing configuration, with zero static preset models.
+    Dynamically probes endpoint with explicit error alerts.
     Saves to ~/.kapsel/ai/config.yaml and verifies connectivity.
     """
     con = console or Console(legacy_windows=False)
+    existing_cfg = load_ai_config()
 
     try:
+        # Determine default provider index if existing config is present
+        default_prov_idx = 0
+        if existing_cfg:
+            old_prov_id = existing_cfg.get("provider")
+            for i, p in enumerate(DEFAULT_PROVIDERS):
+                if p["id"] == old_prov_id:
+                    default_prov_idx = i
+                    break
+            old_name = existing_cfg.get("provider_name", existing_cfg.get("provider", "Custom"))
+            old_model = existing_cfg.get("model", "")
+            con.print(f"[dim]Existing configuration found: [white]{old_name}[/] (model: [bold #00f0ff]{old_model}[/])[/]\n")
+
         # 1. Choice of provider via Two-Column Selector
         provider_names = [prov["name"] for prov in DEFAULT_PROVIDERS]
         choice_idx = select_two_column_interactive(
             items=provider_names,
-            title="Select AI Model Provider (双列选择)",
+            title="Select AI Model Provider",
             subtitle="[↑/↓/←/→] Navigate  |  [Enter] Confirm  |  [Esc/q] Cancel",
             console=con,
+            default_idx=default_prov_idx,
         )
 
         if choice_idx is None:
@@ -342,8 +357,14 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
         selected = DEFAULT_PROVIDERS[choice_idx]
         con.print(f"\n[bold #10b981]✔ Selected:[/] [white]{selected['name']}[/]\n")
 
+        # Check if user selected the same provider as existing configuration
+        is_same_provider = bool(existing_cfg and existing_cfg.get("provider") == selected["id"])
+        default_base = (existing_cfg.get("api_base") if is_same_provider else None) or selected["api_base"]
+        existing_key = (existing_cfg.get("api_key") if is_same_provider else "") or ""
+
         # Outer credential loop in case user wants to re-enter credentials on probe failure
-        api_base = selected["api_base"]
+        api_base = default_base
+        api_key = existing_key
         model_name = ""
 
         while True:
@@ -357,12 +378,20 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
                     api_base = prompt_base
 
             # 3. API Key
-            api_key = ""
             if selected["requires_key"]:
-                api_key = getpass(selected["key_prompt"]).strip()
-                if not api_key:
-                    con.print("[yellow]Warning: Empty API key provided. Requests may fail if authentication is required.[/]")
+                if api_key:
+                    masked = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else "***"
+                    prompt_msg = f"{selected['name']} API Key (press Enter to keep existing [{masked}]): "
+                    entered_key = getpass(prompt_msg).strip()
+                    if entered_key:
+                        api_key = entered_key
+                else:
+                    entered_key = getpass(selected["key_prompt"]).strip()
+                    if not entered_key:
+                        con.print("[yellow]Warning: Empty API key provided. Requests may fail if authentication is required.[/]")
+                    api_key = entered_key
             else:
+                api_key = ""
                 con.print("[dim]No API key required for local provider.[/]")
 
             # 4. Model Selection (Dynamic /models probe with zero default fallback)
@@ -391,6 +420,7 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
                 recovery = input("\nEnter choice [1-3] (default: 1): ").strip() or "1"
                 if recovery == "2":
                     con.print("\n[dim]Re-entering credentials...[/]\n")
+                    api_key = ""
                     continue
                 elif recovery == "3":
                     con.print("\n[dim]Setup aborted.[/]")
@@ -408,11 +438,16 @@ def run_ai_setup_wizard(console: Optional[Console] = None) -> int:
                 model_choices = list(available_models)
                 model_choices.append("✏️  [Manual Entry / Other Model]")
 
+                default_model_idx = 0
+                if existing_cfg and existing_cfg.get("model") in available_models:
+                    default_model_idx = available_models.index(existing_cfg["model"])
+
                 sel_model_idx = select_two_column_interactive(
                     items=model_choices,
                     title=f"Select Model for {selected['name']} ({len(available_models)} available)",
                     subtitle="[↑/↓/←/→] Navigate  |  [Enter] Confirm  |  [Esc/q] Cancel",
                     console=con,
+                    default_idx=default_model_idx,
                 )
 
                 if sel_model_idx is None:
