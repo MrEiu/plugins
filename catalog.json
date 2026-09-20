@@ -36,9 +36,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "install": {
-    "version": "0.2.4",
+    "version": "0.2.5",
     "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with concurrent streaming search, interactive confirmation, and post-install inspection.",
-    "changelog": "Implemented Unified Framed Panel layout with strict column alignment, semver ranking, and progressive selection."
+    "changelog": "Upgraded to fully adaptive prompt_toolkit layout: dynamically responsive columns, guaranteed 100% closed borders, and zero text overflow."
   },
   "portal": {
     "version": "0.1.6",

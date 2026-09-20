@@ -81,6 +81,122 @@ def rank_manager_candidates(items: List[SearchItem], query: str) -> List[SearchI
     return sorted(items, key=sort_key, reverse=True)
 
 
+def build_card_title_formatted_text(
+    query: str,
+    visible_rows: List[Union[ItemRow, ToggleRow]],
+    in_progress: Optional[Set[str]] = None,
+    completed: Optional[Dict[str, int]] = None,
+) -> List[Tuple[str, str]]:
+    """Builds the adaptive title bar for the package search card."""
+    if in_progress:
+        status_text = f"Searching ({len(in_progress)} active)"
+    elif completed is not None:
+        status_text = f"Scan complete ({sum(completed.values())} found)"
+    else:
+        status_text = f"Found {len(visible_rows)} candidates"
+    return [
+        ("class:border", " 📦 Package Search: "),
+        ("class:mgr_header", f"'{query}'"),
+        ("class:help", f" [{status_text}] "),
+    ]
+
+
+def build_card_body_formatted_text(
+    query: str,
+    ordered_managers: List[str],
+    grouped: Dict[str, List[SearchItem]],
+    expanded_managers: Set[str],
+    visible_rows: List[Union[ItemRow, ToggleRow]],
+    selected_idx: int,
+    in_progress: Optional[Set[str]] = None,
+    completed: Optional[Dict[str, int]] = None,
+    row_to_line_map: Optional[Dict[int, int]] = None,
+) -> List[Tuple[str, str]]:
+    """
+    Renders inner content lines for the card body.
+    Columns adapt dynamically to the terminal width to prevent text overflow.
+    No outer border characters are emitted here; prompt_toolkit's layout container
+    draws the outer frame cleanly in dedicated columns.
+    """
+    lines: List[Tuple[str, str]] = []
+    term_cols = shutil.get_terminal_size((80, 24)).columns
+    avail_w = max(36, term_cols - 4)
+
+    if row_to_line_map is not None:
+        row_to_line_map.clear()
+
+    current_line = 0
+
+    if not visible_rows:
+        if in_progress:
+            scanning_names = ", ".join(sorted(in_progress))
+            lines.append(("class:scanning", f"  Scanning registries in background: {scanning_names}...\n"))
+        else:
+            lines.append(("class:warn", f"  No packages found matching '{query}' across active managers.\n"))
+        return lines
+
+    cursor_w = 3
+    pkg_col_w = min(24, max(14, avail_w // 4))
+    ver_col_w = 9
+    badge_col_w = 10
+    rem_desc_w = max(8, avail_w - (cursor_w + pkg_col_w + ver_col_w + badge_col_w + 4))
+
+    current_mgr = None
+    first_section = True
+
+    for i, row in enumerate(visible_rows):
+        is_cur = (i == selected_idx)
+        cursor = " ❯ " if is_cur else "   "
+
+        if row.manager != current_mgr:
+            if not first_section:
+                lines.append(("", "\n"))
+                current_line += 1
+            first_section = False
+
+            current_mgr = row.manager
+            total_in_mgr = len(grouped.get(current_mgr, []))
+            expand_label = "(expanded)" if current_mgr in expanded_managers else f"({min(3, total_in_mgr)}/{total_in_mgr} shown)"
+            lines.append(("class:mgr_header", f"  ● [{current_mgr.upper()}] {expand_label}\n"))
+            current_line += 1
+
+        if row_to_line_map is not None:
+            row_to_line_map[i] = current_line
+
+        if isinstance(row, ItemRow):
+            it = row.item
+            rec_tag = "[★ BEST]" if it.is_recommended else ""
+            warn_tag = "(⚠ Python)" if (it.manager == "pip" and not it.is_recommended) else ""
+            badge_str = rec_tag or warn_tag
+            ver_str = f"v{it.version}" if it.version else ""
+
+            pkg_text = f"{it.package_id:<{pkg_col_w}}"[:pkg_col_w]
+            ver_text = f"{ver_str:<{ver_col_w}}"[:ver_col_w]
+            badge_text = f"{badge_str:<{badge_col_w}}"[:badge_col_w]
+
+            raw_desc = (it.description or "").strip()
+            if len(raw_desc) > rem_desc_w:
+                desc_text = raw_desc[: max(0, rem_desc_w - 3)] + "..."
+            else:
+                desc_text = raw_desc
+
+            row_style = "class:selected" if is_cur else "class:normal"
+            lines.append((row_style, f"{cursor}{pkg_text}  {ver_text}  {badge_text}  {desc_text}\n"))
+            current_line += 1
+
+        elif isinstance(row, ToggleRow):
+            if row.is_expanded:
+                tog_text = f"▾ [Collapse {row.manager} to top 3]"
+            else:
+                tog_text = f"▸ [+ {row.hidden_count} more from {row.manager}] (Press Enter or 'e' to expand)"
+
+            tog_style = "class:selected_toggle" if is_cur else "class:toggle"
+            lines.append((tog_style, f"{cursor}{tog_text}\n"))
+            current_line += 1
+
+    return lines
+
+
 def build_card_formatted_text(
     query: str,
     ordered_managers: List[str],
@@ -91,128 +207,72 @@ def build_card_formatted_text(
     in_progress: Optional[Set[str]] = None,
     completed: Optional[Dict[str, int]] = None,
 ) -> List[Tuple[str, str]]:
+    """Legacy helper for backwards compatibility."""
+    return build_card_body_formatted_text(
+        query=query,
+        ordered_managers=ordered_managers,
+        grouped=grouped,
+        expanded_managers=expanded_managers,
+        visible_rows=visible_rows,
+        selected_idx=selected_idx,
+        in_progress=in_progress,
+        completed=completed,
+    )
+
+
+def create_adaptive_card_layout(
+    get_title_func: Any,
+    get_body_func: Any,
+    get_cursor_func: Optional[Any] = None,
+) -> Any:
     """
-    Constructs a perfectly aligned, unified rounded card panel (Claude/Gum style).
-    All rows maintain the exact same character width, preventing border misalignments.
+    Creates an adaptive rounded card layout with guaranteed closed borders.
+    Top, bottom, and side borders are rendered in isolated columns by prompt_toolkit,
+    preventing any text wrapping or border misalignment.
     """
-    lines: List[Tuple[str, str]] = []
-    term_cols = shutil.get_terminal_size((84, 24)).columns
-    box_width = min(max(78, term_cols - 4), 92)
+    from prompt_toolkit.layout.containers import HSplit, VSplit, Window
+    from prompt_toolkit.layout.controls import FormattedTextControl
+    from prompt_toolkit.layout.dimension import Dimension
+    from prompt_toolkit.layout.layout import Layout
 
-    # 1. Top border with title and scanning status
-    if in_progress:
-        status_text = f"Searching ({len(in_progress)} active)"
-    elif completed is not None:
-        status_text = f"Scan complete ({sum(completed.values())} found)"
-    else:
-        status_text = f"Found {len(visible_rows)} candidates"
+    top_bar = VSplit([
+        Window(width=1, height=1, char="╭", style="class:border"),
+        Window(width=2, height=1, char="─", style="class:border"),
+        Window(content=FormattedTextControl(get_title_func), dont_extend_width=True),
+        Window(char="─", height=1, style="class:border"),
+        Window(width=1, height=1, char="╮", style="class:border"),
+    ], height=1)
 
-    title_part = f"╭─ 📦 Package Search: '{query}' [{status_text}] "
-    rem_top = max(2, box_width - len(title_part) - 1)
-    lines.append(("class:border", title_part + "─" * rem_top + "╮\n"))
+    term_rows = shutil.get_terminal_size((80, 24)).lines
+    max_body_h = max(6, term_rows - 6)
 
-    empty_inner = "│" + " " * (box_width - 2) + "│\n"
-    lines.append(("class:border", empty_inner))
+    body_window = Window(
+        content=FormattedTextControl(get_body_func, get_cursor_position=get_cursor_func),
+        wrap_lines=False,
+        height=Dimension(min=3, max=max_body_h),
+    )
 
-    # Empty state placeholder
-    if not visible_rows:
-        if in_progress:
-            scanning_names = ", ".join(sorted(in_progress))
-            hint = f" Scanning registries in background: {scanning_names}..."
-            rem_h = max(0, box_width - len(hint) - 3)
-            lines.append(("class:border", "│"))
-            lines.append(("class:scanning", hint + " " * rem_h))
-            lines.append(("class:border", " │\n"))
-            lines.append(("class:border", empty_inner))
-            lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
-            lines.append(("class:help", " [Esc/q] Cancel\n"))
-            return lines
-        else:
-            no_match = f" No packages found matching '{query}' across active managers."
-            rem_nm = max(0, box_width - len(no_match) - 3)
-            lines.append(("class:border", "│"))
-            lines.append(("class:warn", no_match + " " * rem_nm))
-            lines.append(("class:border", " │\n"))
-            lines.append(("class:border", empty_inner))
-            lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
-            lines.append(("class:help", " [Esc/q] Cancel\n"))
-            return lines
+    mid_bar = VSplit([
+        Window(width=1, char="│", style="class:border"),
+        body_window,
+        Window(width=1, char="│", style="class:border"),
+    ])
 
-    current_mgr = None
-    first_section = True
+    bot_bar = VSplit([
+        Window(width=1, height=1, char="╰", style="class:border"),
+        Window(char="─", height=1, style="class:border"),
+        Window(width=1, height=1, char="╯", style="class:border"),
+    ], height=1)
 
-    for i, row in enumerate(visible_rows):
-        is_cur = (i == selected_idx)
-        cursor = " ❯ " if is_cur else "   "
+    help_bar = Window(
+        content=FormattedTextControl(lambda: [
+            ("class:help", "  [↑/↓] Navigate  |  [Enter] Confirm/Expand  |  [e] Toggle Expand  |  [Esc/q] Cancel")
+        ]),
+        height=1,
+        style="class:help",
+    )
 
-        # Manager group header inside card
-        if row.manager != current_mgr:
-            if not first_section:
-                lines.append(("class:border", empty_inner))
-            first_section = False
-
-            current_mgr = row.manager
-            total_in_mgr = len(grouped.get(current_mgr, []))
-            expand_label = "(expanded)" if current_mgr in expanded_managers else f"({min(3, total_in_mgr)}/{total_in_mgr} shown)"
-
-            hdr_text = f"   ● [{current_mgr.upper()}] {expand_label}"
-            rem_hdr = max(0, box_width - len(hdr_text) - 2)
-
-            lines.append(("class:border", "│"))
-            lines.append(("class:mgr_header", hdr_text))
-            lines.append(("class:border", " " * rem_hdr + "│\n"))
-
-        # Candidate item row
-        if isinstance(row, ItemRow):
-            it = row.item
-            rec_tag = "[★ BEST]" if it.is_recommended else ""
-            warn_tag = "(⚠ Python)" if (it.manager == "pip" and not it.is_recommended) else ""
-            badge_str = rec_tag or warn_tag
-            ver_str = f"v{it.version}" if it.version else ""
-
-            pkg_col = f"{it.package_id:<22}"[:22]
-            ver_col = f"{ver_str:<10}"[:10]
-            badge_col = f"{badge_str:<10}"[:10]
-
-            # Remaining width allocated for description
-            fixed_len = 1 + 3 + 22 + 10 + 10 + 2
-            rem_desc = max(10, box_width - fixed_len)
-
-            raw_desc = (it.description or "").strip()
-            if len(raw_desc) > rem_desc:
-                desc_col = raw_desc[: rem_desc - 3] + "..."
-            else:
-                desc_col = raw_desc
-            desc_col = f"{desc_col:<{rem_desc}}"
-
-            lines.append(("class:border", "│"))
-            row_style = "class:selected" if is_cur else "class:normal"
-            lines.append((row_style, f"{cursor}{pkg_col}{ver_col}{badge_col}{desc_col} "))
-            lines.append(("class:border", "│\n"))
-
-        # Expand / collapse toggle row
-        elif isinstance(row, ToggleRow):
-            if row.is_expanded:
-                tog_text = f"▾ [Collapse {row.manager} to top 3]"
-            else:
-                tog_text = f"▸ [+ {row.hidden_count} more from {row.manager}] (Press Enter or 'e' to expand)"
-
-            fixed_len = 1 + 3 + 2
-            rem_tog = max(10, box_width - fixed_len)
-            tog_col = f"{tog_text:<{rem_tog}}"
-
-            lines.append(("class:border", "│"))
-            tog_style = "class:selected_toggle" if is_cur else "class:toggle"
-            lines.append((tog_style, f"{cursor}{tog_col} "))
-            lines.append(("class:border", "│\n"))
-
-    # Bottom border
-    lines.append(("class:border", empty_inner))
-    lines.append(("class:border", "╰" + "─" * (box_width - 2) + "╯\n"))
-
-    # Help footer
-    lines.append(("class:help", "  [↑/↓] Navigate  |  [Enter] Confirm/Expand  |  [e] Toggle Expand  |  [Esc/q] Cancel\n"))
-    return lines
+    return Layout(HSplit([top_bar, mid_bar, bot_bar, help_bar]))
 
 
 def search_and_select_interactive(
@@ -319,9 +379,20 @@ def search_and_select_interactive(
         for mgr in ordered_managers:
             executor.submit(_search_worker, mgr)
 
-        def get_menu_text():
+        row_to_line: Dict[int, int] = {}
+
+        def get_title_text():
             with lock:
-                return build_card_formatted_text(
+                return build_card_title_formatted_text(
+                    query=query,
+                    visible_rows=visible_rows,
+                    in_progress=in_progress,
+                    completed=completed,
+                )
+
+        def get_body_text():
+            with lock:
+                return build_card_body_formatted_text(
                     query=query,
                     ordered_managers=ordered_managers,
                     grouped=grouped,
@@ -330,7 +401,14 @@ def search_and_select_interactive(
                     selected_idx=selected_idx,
                     in_progress=in_progress,
                     completed=completed,
+                    row_to_line_map=row_to_line,
                 )
+
+        def get_cursor_pos():
+            from prompt_toolkit.data_structures import Point
+            with lock:
+                y = row_to_line.get(selected_idx, 0)
+                return Point(x=1, y=y)
 
         kb = KeyBindings()
 
@@ -407,7 +485,7 @@ def search_and_select_interactive(
             "help": "dim fg:#94a3b8",
         })
 
-        layout = Layout(HSplit([Window(content=FormattedTextControl(get_menu_text))]))
+        layout = create_adaptive_card_layout(get_title_text, get_body_text, get_cursor_pos)
         app = Application(layout=layout, key_bindings=kb, style=style, full_screen=False)
         app.run()
 
@@ -476,15 +554,29 @@ def select_package_interactive(
 
         rebuild_visible_rows()
 
-        def get_menu_text():
-            return build_card_formatted_text(
+        row_to_line: Dict[int, int] = {}
+
+        def get_title_text():
+            return build_card_title_formatted_text(
+                query=query,
+                visible_rows=visible_rows,
+            )
+
+        def get_body_text():
+            return build_card_body_formatted_text(
                 query=query,
                 ordered_managers=ordered_managers,
                 grouped=grouped,
                 expanded_managers=expanded_managers,
                 visible_rows=visible_rows,
                 selected_idx=selected_idx,
+                row_to_line_map=row_to_line,
             )
+
+        def get_cursor_pos():
+            from prompt_toolkit.data_structures import Point
+            y = row_to_line.get(selected_idx, 0)
+            return Point(x=1, y=y)
 
         kb = KeyBindings()
 
@@ -550,7 +642,7 @@ def select_package_interactive(
             "help": "dim fg:#94a3b8",
         })
 
-        layout = Layout(HSplit([Window(content=FormattedTextControl(get_menu_text))]))
+        layout = create_adaptive_card_layout(get_title_text, get_body_text, get_cursor_pos)
         app = Application(layout=layout, key_bindings=kb, style=style, full_screen=False)
         app.run()
 

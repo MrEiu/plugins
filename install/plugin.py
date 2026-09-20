@@ -228,7 +228,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.2.4",
+        version="0.2.5",
         description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
