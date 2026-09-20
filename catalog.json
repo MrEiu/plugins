@@ -1,9 +1,9 @@
 {
   "_ai_directive": "MANDATORY FOR AI ASSISTANTS: Whenever you modify any plugin, you MUST increment its version by at least one patch step following base-10 decimal rollover at 9 (e.g. 0.1.8 -> 0.1.9 -> 0.2.0, 0.2.9 -> 0.3.0). You MUST synchronize the incremented version in the plugin's manifest (plugin.py) and record both the new version and changelog in this catalog.json.",
   "ai": {
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": "Native terminal AI assistant powered by OpenAI Python SDK with pure CLI interactive tools.",
-    "changelog": "Removed diff-based git commit generation (migrated to dedicated offline rule-based commit plugin)."
+    "changelog": "Expanded AI providers to 19 options, replaced preset models with dynamic zero-fallback probing and error diagnostics, and introduced dual-column interactive selection for providers and models."
   },
   "alias": {
     "version": "0.2.2",

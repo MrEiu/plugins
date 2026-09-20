@@ -8,7 +8,7 @@ All comments and docstrings are in English.
 import json
 from pathlib import Path
 import ssl
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import urllib.error
 import urllib.request
 import yaml
@@ -30,15 +30,23 @@ def get_ai_config_file() -> Path:
 
 DEFAULT_PROVIDERS: List[Dict[str, Any]] = [
     {
+        "id": "deepseek",
+        "name": "DeepSeek (Official API)",
+        "api_base": "https://api.deepseek.com",
+        "requires_key": True,
+        "key_prompt": "Enter DeepSeek API Key (sk-...): ",
+    },
+    {
+        "id": "siliconflow",
+        "name": "SiliconFlow (硅基流动 Multi-Model)",
+        "api_base": "https://api.siliconflow.com/v1",
+        "requires_key": True,
+        "key_prompt": "Enter SiliconFlow API Key (sk-...): ",
+    },
+    {
         "id": "openai",
         "name": "OpenAI (Official API)",
         "api_base": "https://api.openai.com/v1",
-        "model": "gpt-5.6-sol",
-        "models": [
-            "gpt-5.6-sol",
-            "gpt-5.6-terra",
-            "gpt-5.6-luna",
-        ],
         "requires_key": True,
         "key_prompt": "Enter OpenAI API Key (sk-...): ",
     },
@@ -46,16 +54,6 @@ DEFAULT_PROVIDERS: List[Dict[str, Any]] = [
         "id": "anthropic",
         "name": "Anthropic Claude (Official API)",
         "api_base": "https://api.anthropic.com",
-        "model": "claude-opus-5",
-        "models": [
-            "claude-opus-5",
-            "claude-sonnet-5",
-            "claude-fable-5",
-            "claude-opus-4-8",
-            "claude-opus-4-6",
-            "claude-sonnet-4-6",
-            "claude-haiku-4-5-20251001",
-        ],
         "requires_key": True,
         "key_prompt": "Enter Anthropic API Key (sk-ant-...): ",
     },
@@ -63,113 +61,104 @@ DEFAULT_PROVIDERS: List[Dict[str, Any]] = [
         "id": "gemini",
         "name": "Google Gemini (Official API)",
         "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "model": "gemini-3.8-flash",
-        "models": [
-            "gemini-3.8-flash",
-            "gemini-3.7-flash",
-            "gemini-3.6-flash",
-            "gemini-3.5-flash",
-            "gemini-3.1-pro-preview",
-        ],
         "requires_key": True,
         "key_prompt": "Enter Google AI Studio API Key (AIzaSy...): ",
+    },
+    {
+        "id": "qwen",
+        "name": "Alibaba Qwen / DashScope (阿里云百炼)",
+        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "requires_key": True,
+        "key_prompt": "Enter DashScope API Key (sk-...): ",
+    },
+    {
+        "id": "zhipu",
+        "name": "Zhipu AI / GLM (智谱清言)",
+        "api_base": "https://open.bigmodel.cn/api/paas/v4",
+        "requires_key": True,
+        "key_prompt": "Enter Zhipu API Key: ",
+    },
+    {
+        "id": "moonshot",
+        "name": "Moonshot AI / Kimi (月之暗面)",
+        "api_base": "https://api.moonshot.cn/v1",
+        "requires_key": True,
+        "key_prompt": "Enter Moonshot API Key (sk-...): ",
+    },
+    {
+        "id": "minimax",
+        "name": "MiniMax (名之梦 / 海螺)",
+        "api_base": "https://api.minimax.chat/v1",
+        "requires_key": True,
+        "key_prompt": "Enter MiniMax API Key: ",
     },
     {
         "id": "xai",
         "name": "xAI Grok (Official API)",
         "api_base": "https://api.x.ai/v1",
-        "model": "grok-4.6",
-        "models": [
-            "grok-4.6",
-            "grok-4.5",
-            "grok-4.3",
-            "grok-4.20",
-        ],
         "requires_key": True,
         "key_prompt": "Enter xAI API Key: ",
     },
     {
-        "id": "deepseek",
-        "name": "DeepSeek (Official API)",
-        "api_base": "https://api.deepseek.com",
-        "model": "deepseek-v4-pro",
-        "models": [
-            "deepseek-v4-pro",
-            "deepseek-v4-flash",
-            "deepseek-v4-flash-vision-exp",
-        ],
+        "id": "groq",
+        "name": "Groq Cloud (Ultra-Fast LPU)",
+        "api_base": "https://api.groq.com/openai/v1",
         "requires_key": True,
-        "key_prompt": "Enter DeepSeek API Key (sk-...): ",
+        "key_prompt": "Enter Groq API Key (gsk_...): ",
     },
     {
         "id": "mistral",
         "name": "Mistral AI (Official API)",
         "api_base": "https://api.mistral.ai/v1",
-        "model": "mistral-medium-3-5",
-        "models": [
-            "mistral-medium-3-5",
-            "mistral-large-3",
-            "mistral-small-2603",
-        ],
         "requires_key": True,
         "key_prompt": "Enter Mistral API Key: ",
+    },
+    {
+        "id": "openrouter",
+        "name": "OpenRouter (Unified Gateway)",
+        "api_base": "https://openrouter.ai/api/v1",
+        "requires_key": True,
+        "key_prompt": "Enter OpenRouter API Key (sk-or-...): ",
+    },
+    {
+        "id": "together",
+        "name": "Together AI (Cloud Inference)",
+        "api_base": "https://api.together.xyz/v1",
+        "requires_key": True,
+        "key_prompt": "Enter Together API Key: ",
+    },
+    {
+        "id": "deepinfra",
+        "name": "DeepInfra (Serverless Inference)",
+        "api_base": "https://api.deepinfra.com/v1/openai",
+        "requires_key": True,
+        "key_prompt": "Enter DeepInfra API Key: ",
     },
     {
         "id": "cohere",
         "name": "Cohere (Official API)",
         "api_base": "https://api.cohere.com/v2",
-        "model": "command-a-plus-05-2026",
-        "models": [
-            "command-a-plus-05-2026",
-            "command-a-03-2025",
-            "command-a-reasoning-08-2025",
-            "command-a-vision-07-2025",
-            "command-a-translate-08-2025",
-            "command-r7b-12-2024",
-        ],
         "requires_key": True,
         "key_prompt": "Enter Cohere API Key: ",
     },
     {
-        "id": "siliconflow",
-        "name": "SiliconFlow (Multi-Model Cloud)",
-        "api_base": "https://api.siliconflow.com/v1",
-        "model": "deepseek-ai/DeepSeek-V4-Pro-0813",
-        "models": [
-            "deepseek-ai/DeepSeek-V4-Pro-0813",
-            "deepseek-ai/DeepSeek-V4-Flash",
-            "Qwen/Qwen3.5-397B-A17B",
-            "Qwen/Qwen3.5-122B-A10B",
-            "Qwen/Qwen3.5-35B-A3B",
-            "zai-org/GLM-5.3",
-        ],
-        "requires_key": True,
-        "key_prompt": "Enter SiliconFlow API Key: ",
+        "id": "ollama",
+        "name": "Ollama (Local LLM - Free & Offline)",
+        "api_base": "http://localhost:11434/v1",
+        "requires_key": False,
+        "key_prompt": "",
     },
     {
-        "id": "ollama",
-        "name": "Ollama (Local LLM - Free & Offline, No Key Needed)",
-        "api_base": "http://localhost:11434/v1",
-        "model": "qwen3.5:27b",
-        "models": [
-            "qwen3.5:27b",
-            "qwen3.5:35b",
-            "qwen3.5:122b",
-            "gemma4:31b",
-            "gemma4:26b",
-            "gemma4:12b",
-            "minimax-m2.7",
-            "glm-4.7-flash",
-        ],
+        "id": "lmstudio",
+        "name": "LM Studio (Local OpenAI API)",
+        "api_base": "http://localhost:1234/v1",
         "requires_key": False,
         "key_prompt": "",
     },
     {
         "id": "custom",
-        "name": "Custom OpenAI-Compatible (OneAPI / NewAPI / vLLM)",
+        "name": "Custom OpenAI-Compatible (OneAPI/vLLM)",
         "api_base": "",
-        "model": "gpt-5.6-sol",
-        "models": [],
         "requires_key": True,
         "key_prompt": "Enter API Key: ",
     },
@@ -188,19 +177,19 @@ def fetch_dynamic_models(
     api_base: str,
     api_key: str = "",
     provider_id: str = "",
-    timeout: float = 3.5,
-) -> List[str]:
+    timeout: float = 6.0,
+) -> Tuple[List[str], Optional[str]]:
     """
     Dynamically probes the endpoint for available models using standard /models endpoint.
     Supports OpenAI standard schema (data[].id), Cohere/Ollama (models[].name), and Anthropic.
-    Returns a list of discovered model identifiers, or empty list on network or parse failure.
+    Returns (discovered_models, error_message). On failure, returns ([], error_message).
     """
     if not api_base:
-        return []
+        return [], "No API Base URL provided."
 
     clean_base = api_base.strip().rstrip("/")
     if not clean_base.startswith(("http://", "https://")):
-        return []
+        return [], f"Invalid URL scheme in '{api_base}'. URL must begin with http:// or https://"
 
     # Determine probe URL
     if clean_base.endswith("/models"):
@@ -211,7 +200,7 @@ def fetch_dynamic_models(
         models_url = f"{clean_base}/models"
 
     headers: Dict[str, str] = {
-        "User-Agent": "Kapsel-AI/0.1.3",
+        "User-Agent": "Kapsel-AI/0.1.5",
         "Accept": "application/json",
     }
     if api_key:
@@ -233,7 +222,7 @@ def fetch_dynamic_models(
         with urllib.request.urlopen(req, **open_kwargs) as response:
             status = getattr(response, "status", getattr(response, "code", 200))
             if status not in (200, 201):
-                return []
+                return [], f"HTTP status {status} from {models_url}"
             raw_body = response.read().decode("utf-8", errors="replace")
             data = json.loads(raw_body)
 
@@ -262,47 +251,54 @@ def fetch_dynamic_models(
             if m not in seen:
                 seen.add(m)
                 deduped.append(m)
-        return deduped
 
-    except Exception:
-        return []
+        if not deduped:
+            return [], f"Endpoint responded, but returned zero model entries."
+
+        return deduped, None
+
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            err_msg = "HTTP 401 Unauthorized (Invalid API Key or unauthorized access)"
+        elif e.code == 403:
+            err_msg = "HTTP 403 Forbidden (Check model access permissions or account balance)"
+        elif e.code == 404:
+            err_msg = f"HTTP 404 Not Found (Endpoint '{models_url}' does not exist)"
+        else:
+            err_msg = f"HTTP {e.code}: {e.reason} ({models_url})"
+        return [], err_msg
+    except urllib.error.URLError as e:
+        return [], f"Network connection failed: {e.reason} ({models_url})"
+    except TimeoutError:
+        return [], f"Connection timed out after {timeout}s ({models_url})"
+    except Exception as e:
+        return [], f"{type(e).__name__}: {e} ({models_url})"
 
 
 def get_provider_models(
     provider_id: str,
     api_base: Optional[str] = None,
     api_key: Optional[str] = None,
-    timeout: float = 3.5,
-) -> List[str]:
+    timeout: float = 6.0,
+) -> Tuple[List[str], Optional[str]]:
     """
-    Returns available models using: Official API + Dynamic /models Probe + Static Fallback.
-    Attempts to probe live models from the endpoint; falls back cleanly to the static list if probing fails.
+    Dynamically probes provider endpoint for available models.
+    Zero static preset models are used. Returns (models, error_message).
+    If the API call fails, error_message is populated instead of falling back to default models.
     """
     provider = get_provider(provider_id)
-    fallback: List[str] = list(provider.get("models", [])) if provider else []
-
     target_base = (api_base or (provider.get("api_base") if provider else "") or "").strip()
     target_key = (api_key if api_key is not None else "") or ""
 
-    # Attempt dynamic probe if endpoint is available
-    if target_base:
-        dynamic = fetch_dynamic_models(
-            api_base=target_base,
-            api_key=target_key,
-            provider_id=provider_id,
-            timeout=timeout,
-        )
-        if dynamic:
-            return dynamic
+    if not target_base:
+        return [], "No API Base URL configured."
 
-    # Static fallback
-    if fallback:
-        return fallback
-
-    if provider and provider.get("model"):
-        return [provider["model"]]
-
-    return []
+    return fetch_dynamic_models(
+        api_base=target_base,
+        api_key=target_key,
+        provider_id=provider_id,
+        timeout=timeout,
+    )
 
 
 def load_ai_config() -> Optional[Dict[str, Any]]:

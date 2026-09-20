@@ -60,7 +60,7 @@ class AiPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="ai",
         name="Ai",
-        version="0.1.4",
+        version="0.1.5",
         description="Native terminal AI assistant powered by OpenAI Python SDK.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/ai",
@@ -189,13 +189,15 @@ class AiPlugin(KapselPlugin):
                     con.print("[yellow]Usage:[/] kps ai config model <model_name>")
                     if cfg:
                         con.print(f"[dim]Current model:[/] [bold #10b981]{cfg.get('model')}[/]")
-                        available = get_provider_models(
+                        available, err = get_provider_models(
                             provider_id=cfg.get("provider", "custom"),
                             api_base=cfg.get("api_base"),
                             api_key=cfg.get("api_key"),
                         )
                         if available:
                             con.print(f"[dim]Available models:[/] {', '.join(available[:10])}")
+                        elif err:
+                            con.print(f"[dim]Notice:[/] {err}")
                     return 0 if action == "models" else 1
                 if not cfg:
                     con.print("[yellow]AI configuration has not been initialized yet. Run:[/] [bold #00f0ff]kps ai init[/]")
