@@ -26,9 +26,26 @@ from .actions import (
     action_explain,
     action_pipe,
     action_scout,
+    action_spec,
 )
 
 ensure_utf8_io()
+
+
+def _get_client_silent() -> Optional[AiClient]:
+    """Silently loads configuration and instantiates an AiClient without warning or prompt."""
+    cfg = load_ai_config()
+    if not cfg:
+        return None
+    try:
+        return AiClient(
+            api_base=cfg.get("api_base", "https://api.openai.com/v1"),
+            api_key=cfg.get("api_key", ""),
+            model=cfg.get("model", "gpt-4o"),
+            timeout=float(cfg.get("timeout", 35.0)),
+        )
+    except Exception:
+        return None
 
 
 def _get_client(con: Console) -> Optional[AiClient]:
@@ -60,7 +77,7 @@ class AiPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="ai",
         name="Ai",
-        version="0.1.6",
+        version="0.1.7",
         description="Native terminal AI assistant powered by OpenAI Python SDK.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/ai",
@@ -74,16 +91,17 @@ class AiPlugin(KapselPlugin):
         self.context: Optional[PluginContext] = None
 
     def on_load(self, context: PluginContext) -> None:
-        """Registers the 'ai' command under 'kps' scope."""
+        """Registers the 'ai' command under 'kps' scope and ON_AFTER_EXECUTE hook."""
         self.context = context
         context.register_kps_command(
             name="ai",
             handler=self.handle_ai,
-            help_text="Terminal AI copilot: nl commands, auto-fix, explain, scout",
-            usage="kps ai [do|fix|explain|scout|config|init] [args...]",
+            help_text="Terminal AI copilot: nl commands, auto-fix, explain, scout, spec",
+            usage="kps ai [do|fix|explain|scout|spec|config|init] [args...]",
             subcommands={
                 "init": "Run interactive guided setup wizard for AI provider and API key",
                 "config": "Inspect, test, or switch active AI model and configuration",
+                "spec": "Generate Carapace completion spec for a CLI tool (e.g. kps ai spec uv)",
                 "do": "Generate shell command from natural language with 1-click execution",
                 "fix": "Auto-diagnose and propose 1-click fix for the last failed command",
                 "?": "Alias for 'fix' (quick error diagnosis)",
@@ -92,6 +110,35 @@ class AiPlugin(KapselPlugin):
             },
             scope="feature",
         )
+
+        from kapsel.core.plugin.hooks import HookType
+        context.register_hook(HookType.ON_AFTER_EXECUTE, self.on_after_execute)
+
+    def on_after_execute(self, command: str, exit_code: int = 0, duration_ms: float = 0.0, **kwargs) -> None:
+        """
+        Lightweight post-execution hook:
+        Detects if a newly executed command lacks Carapace completion,
+        displays a discreet notice, and spawns a daemon thread to synthesize spec in background.
+        """
+        import threading
+        from .spec_generator import is_candidate_missing_tool, generate_carapace_spec
+
+        candidate = is_candidate_missing_tool(command, exit_code)
+        if not candidate:
+            return
+
+        client = _get_client_silent()
+        if not client:
+            return
+
+        # Print lightweight terminal notice
+        con = Console(legacy_windows=False)
+        con.print(f"\n[dim]💡 正在后台为 [bold #00f0ff]'{candidate}'[/] 智能生成 Carapace 补全规则...[/]")
+
+        def _bg_task():
+            generate_carapace_spec(candidate, client, is_background=True)
+
+        threading.Thread(target=_bg_task, daemon=True, name=f"kps-ai-spec-{candidate}").start()
 
     def handle_ai(self, args: List[str], console: Optional[Console] = None) -> int:
         """
@@ -131,6 +178,7 @@ class AiPlugin(KapselPlugin):
             con.print("  [bold #a855f7]kps ai fix[/] | [bold #a855f7]kps ai ?[/]         Auto-diagnose last failed command & propose 1-click fix")
             con.print("  [bold #a855f7]kps ai explain [cmd][/]        Dissect command syntax, flags, and arguments step-by-step")
             con.print("  [bold #a855f7]kps ai scout[/]                Reconnaissance workspace architecture, tech stack & entrypoints")
+            con.print("  [bold #a855f7]kps ai spec <tool>[/]          Synthesize and register Carapace completion spec for a CLI tool")
             con.print("  [bold #a855f7]<cmd> | kps ai [prompt][/]     Process piped terminal output through AI in real-time\n")
             con.print("[bold white]Configuration:[/]")
             con.print("  [bold #a855f7]kps ai init[/]                 Interactive setup wizard (DeepSeek, SiliconFlow, Ollama, Gemini, OpenAI)")
@@ -240,7 +288,16 @@ class AiPlugin(KapselPlugin):
         if sub == "scout":
             return action_scout(con=con, client=client)
 
-        # 9. Natural language command generator ('do' prefix or default prompt)
+        # 9. Explicit Carapace completion specification generator
+        if sub == "spec":
+            if len(args) < 2:
+                con.print("[yellow]Usage:[/] kps ai spec <tool_name>")
+                con.print("[dim]Example: kps ai spec uv[/]\n")
+                return 1
+            target_tool = args[1]
+            return action_spec(tool=target_tool, con=con, client=client)
+
+        # 10. Natural language command generator ('do' prefix or default prompt)
         if sub == "do":
             prompt_tokens = args[1:]
         else:

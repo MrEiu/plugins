@@ -470,3 +470,35 @@ Manifest Contents:
     except Exception as e:
         con.print(f"[bold #f43f5e]AI Error:[/] {e}\n")
         return 1
+
+
+def action_spec(tool: str, con: Console, client: AiClient) -> int:
+    """
+    Explicitly generates or updates a Carapace completion specification for a CLI tool.
+    Invoked via 'kps ai spec <tool>'.
+    """
+    import shutil
+    from .spec_generator import generate_carapace_spec
+
+    normalized = (tool or "").strip().lower()
+    if not normalized:
+        con.print("[bold #f43f5e]Error:[/] Please specify a tool name. Example: [bold #00f0ff]kps ai spec uv[/]\n")
+        return 1
+
+    if not shutil.which(normalized):
+        con.print(f"[bold #f43f5e]Error:[/] Tool [bold white]'{normalized}'[/] was not found on PATH. Please verify it is installed.\n")
+        return 1
+
+    con.print(f"\n[bold #00f0ff]🤖 Generating Carapace completion specification for '{normalized}'...[/]")
+    con.print("[dim]Probing CLI help text and querying AI model...[/]")
+
+    ok, result = generate_carapace_spec(normalized, client, console=con, is_background=False)
+    if ok:
+        con.print(f"\n[bold #10b981]✔ Carapace specification successfully generated and registered![/]")
+        con.print(f"  [dim]Saved file:[/] [white]{result}[/]")
+        con.print(f"  [dim]Try it now:[/] [bold #00f0ff]{normalized} <Tab>[/] for instant autocompletion!\n")
+        return 0
+    else:
+        con.print(f"\n[bold #f43f5e]✖ Failed to generate specification:[/] {result}\n")
+        return 1
+

@@ -1,9 +1,9 @@
 {
   "_ai_directive": "MANDATORY FOR AI ASSISTANTS: Whenever you modify any plugin, you MUST increment its version by at least one patch step following base-10 decimal rollover at 9 (e.g. 0.1.8 -> 0.1.9 -> 0.2.0, 0.2.9 -> 0.3.0). You MUST synchronize the incremented version in the plugin's manifest (plugin.py) and record both the new version and changelog in this catalog.json.",
   "ai": {
-    "version": "0.1.6",
+    "version": "0.1.7",
     "description": "Native terminal AI assistant powered by OpenAI Python SDK with pure CLI interactive tools.",
-    "changelog": "Added existing configuration auto-detection and preservation in setup wizard; reordered providers with Custom first and international models prioritized; removed parenthetical notes from names and stripped (双列选择) from title."
+    "changelog": "Added AI-driven Carapace completion specification generator (kps ai spec <tool>) and lightweight background auto-learning hook for uncataloged CLI tools with anti-misjudgment guardrails."
   },
   "alias": {
     "version": "0.2.2",
