@@ -8,7 +8,7 @@ Maps 10 major file categories directly to industry-standard CLI power tools:
 5. Folders & Directory  -> eza / tree
 6. Archives (zip, tar)  -> 7z / tar
 7. Images               -> chafa
-8. PDF Documents        -> pdf-cli
+8. PDF Documents        -> pdftoppm + chafa
 9. Media Audio/Video    -> mediainfo / ffprobe
 10. Unknown Binaries    -> xxd / hexdump
 
@@ -35,6 +35,11 @@ try:
     from .fm import run_file_manager
 except ImportError:
     from plugins.preview.fm import run_file_manager
+
+try:
+    from .viewer import run_preview_viewer
+except ImportError:
+    from plugins.preview.viewer import run_preview_viewer
 
 try:
     from kapsel.ui.banner import ensure_utf8_io
@@ -93,18 +98,18 @@ def _resolve_tool_executable(name: str) -> Optional[str]:
 class PreviewPlugin(KapselPlugin):
     """
     Kapsel Preview Plugin: Universal smart CLI preview dispatcher.
-    Maps file types directly to specialized CLI tools (bat, glow, jq, xsv, eza, 7z, chafa, pdf-cli).
+    Maps file types directly to specialized CLI tools (bat, glow, jq, xsv, eza, 7z, chafa, pdftoppm).
     """
 
     manifest = PluginManifest(
         id="preview",
         name="Preview",
-        version="0.1.5",
-        description="Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm).",
+        version="0.2.1",
+        description="Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm) and paginated TUI viewer container.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/preview",
         min_kapsel_version="0.1.0",
-        tags=["preview", "cat", "view", "fm", "file-manager", "miller-columns", "bat", "glow", "xsv", "eza", "chafa", "7z", "ffmpeg", "magick", "resvg", "pdf-cli", "mediainfo", "xxd"],
+        tags=["preview", "cat", "view", "fm", "file-manager", "miller-columns", "bat", "glow", "xsv", "eza", "chafa", "7z", "ffmpeg", "magick", "resvg", "pdftoppm", "mediainfo", "xxd"],
     )
 
     def __init__(self) -> None:
@@ -210,7 +215,10 @@ class PreviewPlugin(KapselPlugin):
             return True, ""
 
         con = Console(legacy_windows=False)
-        self.handle_preview(args, con)
+        try:
+            self.handle_preview(args, con)
+        except Exception as e:
+            con.print(f"[bold #f43f5e]Preview error:[/] {e}")
         return True, ""
 
     def provide_completions(self, text_before_cursor: str) -> List[dict]:
@@ -285,6 +293,7 @@ class PreviewPlugin(KapselPlugin):
         target_str: Optional[str] = None
         lines_limit: Optional[int] = None
         page_num: int = 1
+        force_cli: bool = False
         idx = 0
 
         while idx < len(args):
@@ -304,6 +313,9 @@ class PreviewPlugin(KapselPlugin):
             elif arg in ("-a", "--all"):
                 lines_limit = 0
                 idx += 1
+            elif arg in ("--cli", "--raw"):
+                force_cli = True
+                idx += 1
             elif not arg.startswith("-") and target_str is None:
                 target_str = arg
                 idx += 1
@@ -312,7 +324,7 @@ class PreviewPlugin(KapselPlugin):
 
         if not target_str:
             con.print("[bold #f43f5e]Error:[/] Please specify a file or directory path to preview.")
-            con.print("[dim]Usage: prev <path> [-p <page>] [-l <lines>][/]\n")
+            con.print("[dim]Usage: prev <path> [-p <page>] [-l <lines>] [--cli][/]\n")
             return 1
 
         target_path = Path(target_str).expanduser()
@@ -320,6 +332,19 @@ class PreviewPlugin(KapselPlugin):
             con.print(f"[bold #f43f5e]Error:[/] Path '[white]{target_str}[/]' does not exist.")
             return 1
 
+        # 1. Directory -> opens native Miller Columns File Manager (fm)
+        if target_path.is_dir():
+            target_cd = run_file_manager(target_path)
+            if target_cd:
+                con.print(f"[bold #10b981]⚡ Selected directory:[/] [white]{target_cd}[/]")
+            return 0
+
+        # 2. PDF -> opens the interactive paginated TUI viewer.
+        # Other formats retain their native terminal CLI renderer.
+        if target_path.suffix.lower() == ".pdf" and not force_cli and sys.stdout.isatty():
+            return run_preview_viewer(target_path, initial_page=page_num)
+
+        # 3. Standard non-interactive stdout fallback for shell pipes
         return self.dispatch_preview(target_path, con, lines_limit=lines_limit, page_num=page_num)
 
     def dispatch_preview(
@@ -514,10 +539,9 @@ class PreviewPlugin(KapselPlugin):
 
     def _exec_image(self, path: Path, con: Console) -> int:
         """
-        Image & Vector preview via resvg / magick / chafa.
-        Yazi pattern:
-        1. For SVG: renders with resvg or magick to high-speed raster bitmap, then displays via chafa.
-        2. For standard images: renders directly with chafa.
+        Image & Vector preview via resvg / magick / chafa Sixel output.
+        SVG files are rasterized first; all image output uses the native Sixel
+        graphics protocol instead of character-art rendering.
         """
         tool_chafa = _resolve_tool_executable("chafa")
         if not tool_chafa:
@@ -535,7 +559,9 @@ class PreviewPlugin(KapselPlugin):
                         capture_output=True,
                     )
                     if res.returncode == 0 and cache_png.exists():
-                        return subprocess.run([tool_chafa, str(cache_png)]).returncode
+                        return subprocess.run(
+                            [tool_chafa, "--format=sixels", "--colors=full", str(cache_png)]
+                        ).returncode
 
             # 2. Try magick for SVG
             tool_magick = _resolve_tool_executable("magick")
@@ -544,10 +570,12 @@ class PreviewPlugin(KapselPlugin):
                     cache_png = Path(tmp_dir) / "svg_render.png"
                     res = subprocess.run([tool_magick, str(path), str(cache_png)], capture_output=True)
                     if res.returncode == 0 and cache_png.exists():
-                        return subprocess.run([tool_chafa, str(cache_png)]).returncode
+                        return subprocess.run(
+                            [tool_chafa, "--format=sixels", "--colors=full", str(cache_png)]
+                        ).returncode
 
-        # Direct chafa rendering
-        return subprocess.run([tool_chafa, "--size=80x25", str(path)]).returncode
+        # Direct native Sixel rendering; Chafa chooses the terminal view size.
+        return subprocess.run([tool_chafa, "--format=sixels", "--colors=full", str(path)]).returncode
 
     def _exec_pdf(self, path: Path, con: Console, page: int = 1) -> int:
         """
@@ -679,4 +707,3 @@ class PreviewPlugin(KapselPlugin):
 
 
 Plugin = PreviewPlugin
-

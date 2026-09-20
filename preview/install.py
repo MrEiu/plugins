@@ -23,7 +23,7 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
     {"name": "eza", "category": "Directories", "scoop": "eza", "winget": "eza-community.eza", "brew": "eza", "cargo": "eza"},
     {"name": "7z", "category": "Archives", "scoop": "7zip", "winget": "7zip.7zip", "brew": "sevenzip", "cargo": ""},
     {"name": "chafa", "category": "Terminal Images", "scoop": "chafa", "winget": "", "brew": "chafa", "cargo": ""},
-    {"name": "pdf-cli", "category": "PDF Documents", "scoop": "poppler", "winget": "", "brew": "poppler", "cargo": "pdf-cli"},
+    {"name": "pdftoppm", "category": "PDF Documents", "scoop": "poppler", "winget": "", "brew": "poppler", "cargo": ""},
     {"name": "mediainfo", "category": "Media Metadata", "scoop": "mediainfo", "winget": "MediaArea.MediaInfo.CLI", "brew": "mediainfo", "cargo": ""},
     {"name": "xxd", "category": "Hex / Binaries", "scoop": "vim", "winget": "", "brew": "xxd", "cargo": ""},
 ]

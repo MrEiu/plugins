@@ -11,7 +11,7 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "autopilot": {
-    "version": "0.2.0",
+    "version": "0.2.1",
     "description": "Production process manager and daemon supervisor powered by PM2.",
     "changelog": "Rewritten with PM2 as core engine: polyglot runtimes, cluster mode, zero-downtime reload, and dynamic autocompletion."
   },
@@ -66,9 +66,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "preview": {
-    "version": "0.1.5",
-    "description": "Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm).",
-    "changelog": "Adopted Yazi previewer architecture: 7zz/7z piped tarball inspection, jq with bat fallback, ffmpeg video keyframe thumbnailing, magick font specimen rendering, and resvg/magick SVG vector support."
+    "version": "0.2.0",
+    "description": "Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), native 3-column Miller Columns file manager (fm), and paginated TUI viewer container.",
+    "changelog": "Changed image previews from Chafa character art to native Sixel graphics output."
   },
   "update": {
     "version": "0.1.0",
@@ -101,5 +101,3 @@
     "changelog": "Initial release: 4-thread concurrent plugin dependency inspection with auto-fix, and interactive configuration/log/cache cleaner."
   }
 }
-
-

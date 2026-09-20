@@ -144,10 +144,10 @@ tools:
             manager: "apt"
             pkg: "chafa"
 
-  pdf-cli:
-    name: "pdf-cli"
-    description: "CLI utility for extracting text from PDF"
-    bin: "pdftotext"
+  pdftoppm:
+    name: "pdftoppm"
+    description: "PDF to image converter and visual page rasterizer (Poppler)"
+    bin: "pdftoppm"
     platforms:
       windows:
         strategy:
@@ -159,6 +159,9 @@ tools:
           - type: "os"
             manager: "brew"
             pkg: "poppler"
+          - type: "os"
+            manager: "apt"
+            pkg: "poppler-utils"
 
   mediainfo:
     name: "mediainfo"
