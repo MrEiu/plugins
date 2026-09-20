@@ -24,11 +24,11 @@ from kapsel.storage.config import get_kapsel_dir
 
 try:
     from .streaming_search import concurrent_streaming_search, SearchItem
-    from .interactive import select_package_interactive
+    from .interactive import select_package_interactive, search_and_select_interactive
     from .inspector import inspect_installed_package
 except ImportError:
     from plugins.install.streaming_search import concurrent_streaming_search, SearchItem
-    from plugins.install.interactive import select_package_interactive
+    from plugins.install.interactive import select_package_interactive, search_and_select_interactive
     from plugins.install.inspector import inspect_installed_package
 
 try:
@@ -228,7 +228,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.2.2",
+        version="0.2.3",
         description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
@@ -476,28 +476,22 @@ class InstallPlugin(KapselPlugin):
             mpm_exec = _resolve_mpm_executable()
             if mpm_exec:
                 active_managers = self.get_active_managers()
-                con.print(f"\n[bold #00f0ff]🔍 Stranger package detected:[/] Searching '[bold white]{pkg_name}[/]' across active managers with platform priority...")
-                results = concurrent_streaming_search(
+                selected = search_and_select_interactive(
                     mpm_exec=mpm_exec,
                     managers=active_managers,
                     query=pkg_name,
                     console=con,
                 )
-                if results:
-                    con.print("[bold #00f0ff]💡 Secondary confirmation: Select the exact package candidate to install:[/]")
-                    selected = select_package_interactive(results, console=con)
-                    if selected:
-                        con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
-                        install_args = [f"--{selected.manager}", selected.package_id]
-                        ret = _run_mpm_command("install", install_args, con)
-                        if ret == 0:
-                            inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
-                        return ret
-                    else:
-                        con.print("[dim]Installation cancelled by user.[/]")
-                        return 0
+                if selected:
+                    con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
+                    install_args = [f"--{selected.manager}", selected.package_id]
+                    ret = _run_mpm_command("install", install_args, con)
+                    if ret == 0:
+                        inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
+                    return ret
                 else:
-                    con.print(f"[yellow]No exact match found in streaming search. Falling back to direct priority install...[/]\n")
+                    con.print("[dim]Installation cancelled by user.[/]")
+                    return 0
 
         forwarded_args = self._inject_priority_args(args)
         ret = _run_mpm_command("install", forwarded_args, con)
@@ -543,21 +537,15 @@ class InstallPlugin(KapselPlugin):
             return _run_mpm_command("search", args, con)
 
         active_managers = self.get_active_managers()
-        results = concurrent_streaming_search(
-            mpm_exec=mpm_exec,
-            managers=active_managers,
-            query=query,
-            console=con,
-        )
 
-        if not results:
-            con.print(f"[yellow]No packages matching '{query}' found across active managers.[/]\n")
-            return 0
-
-        # Secondary interactive confirmation if connected to interactive terminal
+        # Interactive progressive selection if connected to interactive terminal
         if sys.stdin.isatty():
-            con.print("[bold #00f0ff]💡 You can select a package from the search results to install it immediately:[/]")
-            selected = select_package_interactive(results, console=con)
+            selected = search_and_select_interactive(
+                mpm_exec=mpm_exec,
+                managers=active_managers,
+                query=query,
+                console=con,
+            )
             if selected:
                 con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
                 install_args = [f"--{selected.manager}", selected.package_id]
@@ -565,7 +553,15 @@ class InstallPlugin(KapselPlugin):
                 if ret == 0:
                     inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
                 return ret
+            return 0
 
+        # Non-interactive / headless fallback
+        results = concurrent_streaming_search(
+            mpm_exec=mpm_exec,
+            managers=active_managers,
+            query=query,
+            console=con,
+        )
         return 0
 
     def handle_sync(self, args: List[str], console: Optional[Console] = None) -> int:

@@ -36,9 +36,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "install": {
-    "version": "0.2.2",
+    "version": "0.2.3",
     "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with concurrent streaming search, interactive confirmation, and post-install inspection.",
-    "changelog": "Integrated concurrent streaming search and interactive secondary confirmation directly into kps install for stranger packages."
+    "changelog": "Implemented search_and_select_interactive for real-time progressive selection without waiting for all managers to complete."
   },
   "portal": {
     "version": "0.1.6",
