@@ -180,47 +180,67 @@ def build_results_table(
     in_progress: Set[str],
     completed: Dict[str, int],
     query: str,
+    max_per_manager: int = 3,
 ) -> Table:
-    """Renders the Rich Live Table showing streaming results and manager status."""
+    """Renders the Rich Live Table grouping results by manager with top 3 per manager limit."""
     table = Table(
-        title=f"📦 Multi-Manager Search Results for '[bold #00f0ff]{query}[/]'",
+        title=f"📦 Multi-Manager Search for '[bold #00f0ff]{query}[/]' (Top 3 per manager)",
         title_style="bold white",
         border_style="bright_blue",
         header_style="bold #38bdf8",
         box=None,
     )
-    table.add_column("Rank", justify="center", style="dim", width=6)
     table.add_column("Manager", style="cyan", width=12)
-    table.add_column("Package ID", style="bold white", width=24)
-    table.add_column("Latest Version", style="green", width=16)
+    table.add_column("Package ID", style="bold white", width=26)
+    table.add_column("Version", style="green", width=14)
     table.add_column("Description", style="dim", overflow="ellipsis")
     table.add_column("Recommendation", justify="center", width=16)
 
-    # Sort items by platform priority weight descending, then by package_id
-    sorted_items = sorted(
-        items,
-        key=lambda x: (x.priority, 1 if x.package_id.lower() == query.lower() else 0),
-        reverse=True,
-    )
+    # Group items by manager
+    grouped: Dict[str, List[SearchItem]] = {}
+    for item in items:
+        grouped.setdefault(item.manager, []).append(item)
 
-    # Mark top recommendation
-    if sorted_items:
-        sorted_items[0].is_recommended = True
+    # Order managers by platform priority weight
+    ordered_mgrs = sorted(grouped.keys(), key=get_manager_weight, reverse=True)
 
-    for idx, item in enumerate(sorted_items, 1):
-        rec_text = "[bold #10b981]★ RECOMMENDED[/]" if item.is_recommended else ""
-        table.add_row(
-            f"#{idx}",
-            item.manager,
-            item.package_id,
-            item.version or "-",
-            item.description or "-",
-            rec_text,
+    # Sort each manager's items (exact match / priority first)
+    has_recommended = False
+    for mgr in ordered_mgrs:
+        mgr_items = sorted(
+            grouped[mgr],
+            key=lambda x: (1 if x.package_id.lower() == query.lower() else 0, x.priority),
+            reverse=True,
         )
+        for it in mgr_items[:max_per_manager]:
+            rec_text = ""
+            if not has_recommended and (it.package_id.lower() == query.lower() or it.priority >= 90):
+                it.is_recommended = True
+                rec_text = "[bold #10b981]★ RECOMMENDED[/]"
+                has_recommended = True
 
-    # If table has no rows yet, provide placeholder
-    if not sorted_items:
-        table.add_row("-", "searching...", "...", "-", "Scanning package registries...", "")
+            table.add_row(
+                it.manager,
+                it.package_id,
+                it.version or "-",
+                it.description or "-",
+                rec_text,
+            )
+
+        if len(mgr_items) > max_per_manager:
+            hidden_cnt = len(mgr_items) - max_per_manager
+            table.add_row(
+                f"[dim]{mgr}[/]",
+                f"[dim italic]... +{hidden_cnt} more (expandable)[/]",
+                "-",
+                f"[dim]Total {len(mgr_items)} packages found in {mgr}[/]",
+                "",
+            )
+
+    # If table has no rows yet, provide scanning status
+    if not items:
+        status_str = f"Scanning {len(in_progress)} package managers..." if in_progress else "No results yet."
+        table.add_row("-", "searching...", "-", status_str, "")
 
     return table
 
@@ -234,6 +254,7 @@ def concurrent_streaming_search(
 ) -> List[SearchItem]:
     """
     Executes concurrent multi-manager search with Rich Live streaming progress.
+    Uses transient display so it seamlessly transitions to the single selection view without duplicate tables.
     Returns the aggregated, platform-prioritized list of SearchItem results.
     """
     con = console or Console(legacy_windows=False)
@@ -241,7 +262,7 @@ def concurrent_streaming_search(
         con.print("[yellow]No active package managers available to search.[/]")
         return []
 
-    con.print(f"\n[bold #00f0ff]⚡ Initiating concurrent search across {len(managers)} package managers...[/]")
+    con.print(f"\n[bold #00f0ff]⚡ Scanning across {len(managers)} package managers (top 3 per searcher, expandable)...[/]")
 
     all_items: List[SearchItem] = []
     in_progress = set(managers)
@@ -255,7 +276,7 @@ def concurrent_streaming_search(
         build_results_table(all_items, in_progress, completed, query),
         console=con,
         refresh_per_second=8,
-        transient=False,
+        transient=True,
     ) as live:
         with ThreadPoolExecutor(max_workers=min(len(ordered_managers), 8)) as executor:
             future_to_manager = {
