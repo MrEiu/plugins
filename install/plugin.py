@@ -228,7 +228,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.2.1",
+        version="0.2.2",
         description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
@@ -460,6 +460,44 @@ class InstallPlugin(KapselPlugin):
                     return 0
                 else:
                     con.print(f"[yellow]Declarative installation failed. Falling back to package managers...[/]")
+
+        # 2b. Stranger package workflow: if no explicit manager or -y/--yes/--direct flag,
+        # in interactive TTY, first execute concurrent streaming search with dynamic display,
+        # prompt with secondary interactive confirmation, install selected package, and inspect.
+        is_direct = any(a in ("-y", "--yes", "--direct", "--blind") for a in args)
+        has_explicit_manager = any(
+            (a.startswith("--") and a[2:] in MANAGER_BINARIES)
+            or a in ("--manager", "-m")
+            for a in args
+        )
+        is_search_flag = any(a in ("-s", "--search", "-i", "--interactive") for a in args)
+
+        if pkg_name and (is_search_flag or (sys.stdin.isatty() and not is_direct and not has_explicit_manager)):
+            mpm_exec = _resolve_mpm_executable()
+            if mpm_exec:
+                active_managers = self.get_active_managers()
+                con.print(f"\n[bold #00f0ff]🔍 Stranger package detected:[/] Searching '[bold white]{pkg_name}[/]' across active managers with platform priority...")
+                results = concurrent_streaming_search(
+                    mpm_exec=mpm_exec,
+                    managers=active_managers,
+                    query=pkg_name,
+                    console=con,
+                )
+                if results:
+                    con.print("[bold #00f0ff]💡 Secondary confirmation: Select the exact package candidate to install:[/]")
+                    selected = select_package_interactive(results, console=con)
+                    if selected:
+                        con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
+                        install_args = [f"--{selected.manager}", selected.package_id]
+                        ret = _run_mpm_command("install", install_args, con)
+                        if ret == 0:
+                            inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
+                        return ret
+                    else:
+                        con.print("[dim]Installation cancelled by user.[/]")
+                        return 0
+                else:
+                    con.print(f"[yellow]No exact match found in streaming search. Falling back to direct priority install...[/]\n")
 
         forwarded_args = self._inject_priority_args(args)
         ret = _run_mpm_command("install", forwarded_args, con)
