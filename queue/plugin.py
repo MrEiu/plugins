@@ -2,13 +2,15 @@
 Queue (Background Task Queue & Autonomous Execution) Plugin for Kapsel.
 Bridges Pueue (daemon and CLI) to provide zero-friction background task execution,
 queue orchestration, live logging, and process lifecycle management.
-Exposes functional commands under the 'kps queue' namespace.
+Features environment resource redundancy probing (look), multi-GPU {gpu} parameter matching,
+bracket-based condition/command entry, and autonomous task dispatching.
 All comments and descriptions are in English.
 """
 
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +26,29 @@ from kapsel.core.plugin.context import PluginContext
 from kapsel.core.plugin.hooks import HookType
 from kapsel.storage.config import get_kapsel_dir
 from kapsel.ui.banner import ensure_utf8_io
+
+from .look import (
+    render_look_dashboard,
+    probe_all_gpus,
+    probe_cpu,
+    probe_memory,
+    is_system_redundant,
+)
+from .scheduler import (
+    add_pending_task,
+    list_pending_tasks,
+    remove_pending_task,
+    get_max_running,
+    set_max_running,
+    get_check_interval,
+    set_check_interval,
+    get_active_allocated_gpus,
+    get_thresholds,
+    get_config,
+    update_config,
+    tick,
+    load_state,
+)
 
 ensure_utf8_io()
 
@@ -116,7 +141,7 @@ def _ensure_daemon_running(console: Optional[Console] = None, silent: bool = Fal
 
     con = console or Console(legacy_windows=False)
     if not silent:
-        con.print("[dim]⚡ Autopilot: Starting Pueue background daemon...[/]")
+        con.print("[dim]⚡ Queue: Starting Pueue background daemon...[/]")
 
     try:
         is_win = sys.platform == "win32"
@@ -157,9 +182,42 @@ def _ensure_daemon_running(console: Optional[Console] = None, silent: bool = Fal
     return _is_daemon_alive(pueue_bin)
 
 
+def _ensure_scheduler_supervised(pueue_bin: str) -> None:
+    """
+    Ensures Pueue supervises the autonomous scheduler loop in the '_scheduler' group.
+    Uses Pueue directly as the background supervisor without custom daemon code.
+    """
+    try:
+        res = subprocess.run([pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=1.0)
+        if res.returncode != 0:
+            return
+
+        data = json.loads(res.stdout)
+        groups = data.get("groups", {})
+        if "_scheduler" not in groups:
+            subprocess.run([pueue_bin, "group", "add", "_scheduler"], capture_output=True, timeout=2.0)
+            subprocess.run([pueue_bin, "parallel", "-g", "_scheduler", "1"], capture_output=True, timeout=2.0)
+
+        tasks = data.get("tasks", {})
+        for t in tasks.values():
+            if t.get("group") == "_scheduler" and t.get("status") in ("Running", "Queued"):
+                return
+
+        scheduler_script = Path(__file__).parent / "scheduler.py"
+        py_exec = sys.executable
+        subprocess.run(
+            [pueue_bin, "add", "-g", "_scheduler", "--", py_exec, str(scheduler_script)],
+            capture_output=True,
+            timeout=2.0,
+        )
+    except Exception:
+        pass
+
+
 class QueuePlugin(KapselPlugin):
     """
-    Queue plugin integrating Pueue for background execution and queue management.
+    Queue plugin integrating Pueue for background execution, hardware resource redundancy probing,
+    multi-GPU auto-dispatching with {gpu} matching, and queue lifecycle management.
     All comments and descriptions are in English.
     """
 
@@ -173,8 +231,8 @@ class QueuePlugin(KapselPlugin):
         return PluginManifest(
             id="queue",
             name="Queue",
-            version="0.1.2",
-            description="Autonomous background task queue and daemon execution manager powered by Pueue.",
+            version="0.1.4",
+            description="Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
             author="MrEiu",
             homepage="https://github.com/MrEiu/plugins",
         )
@@ -187,11 +245,15 @@ class QueuePlugin(KapselPlugin):
             context.register_kps_command(
                 name=cmd_alias,
                 handler=self.handle_queue_command,
-                help_text="Autonomous background task queue & process daemon manager (powered by Pueue)",
+                help_text="Autonomous task queue & resource-aware governor with multi-GPU auto-dispatch (powered by Pueue)",
                 subcommands={
-                    "add": "Enqueue a command for background execution (e.g. kps queue add npm run build)",
-                    "run": "Alias for add",
-                    "status": "Display full task queue status and concurrency limits",
+                    "add": "Enqueue task with resource checking & {gpu} matching: kps queue add [condition] [command]",
+                    "look": "Inspect hardware resource redundancy (CPU, RAM, all GPUs VRAM & utilization)",
+                    "status": "Display active running tasks, allocated GPUs, and pending queue",
+                    "config": "View or adjust thresholds: kps queue config [--min-ram 1.0GB] [--min-vram 20%] [--limit 4]",
+                    "limit": "View or adjust maximum concurrent running tasks (default 4)",
+                    "interval": "View or adjust periodic scheduler check interval (default 5s)",
+                    "pending": "View and manage pending tasks waiting for resources",
                     "log": "Display stdout/stderr output log for a specific task",
                     "follow": "Stream real-time log output for a running task (tail -f style)",
                     "pause": "Pause running tasks or entire task groups",
@@ -200,11 +262,11 @@ class QueuePlugin(KapselPlugin):
                     "kill": "Terminate running task(s) or whole groups",
                     "clean": "Remove finished/successful tasks from queue history",
                     "reset": "Kill all running tasks and reset entire queue",
-                    "parallel": "Adjust maximum concurrent worker tasks",
+                    "parallel": "Adjust Pueue maximum concurrent worker tasks",
                     "group": "Manage task groups and queues",
                     "daemon": "Manage Pueue background service (status, start, stop, restart)",
                 },
-                usage=f"kps {cmd_alias} [add|status|log|follow|pause|start|kill|clean|daemon] [args...]",
+                usage=f"kps {cmd_alias} [add|look|status|config|limit|interval|pending|log|follow|pause|start|kill|clean|daemon] [args...]",
                 scope="feature",
             )
 
@@ -233,18 +295,38 @@ class QueuePlugin(KapselPlugin):
         sub = args[0].lower()
         sub_args = args[1:]
 
-        # 2. Daemon Management: 'kps auto daemon [status|start|stop|restart]'
+        # 2. Daemon Management: 'kps queue daemon [status|start|stop|restart]'
         if sub == "daemon":
             return self._handle_daemon_subcommand(sub_args, con)
 
-        # Ensure daemon is running for all operational tasks
+        # Ensure Pueue daemon is running
         if not _ensure_daemon_running(con):
             con.print("[bold #f43f5e]Error:[/] [white]Failed to connect or start Pueue daemon (pueued).[/]")
-            con.print("[dim]Try starting it manually with:[/] [bold #00f0ff]kps auto daemon start[/]\n")
+            con.print("[dim]Try starting it manually with:[/] [bold #00f0ff]kps queue daemon start[/]\n")
             return 1
 
+        # Ensure background scheduler is supervised by Pueue
+        _ensure_scheduler_supervised(self.pueue_bin)
+
+        # Execute instant scheduler tick for immediate responsiveness
+        tick(self.pueue_bin)
+
         # 3. Subcommand routing
-        if sub in ("status", "st"):
+        if sub in ("look", "res", "resources", "probe"):
+            return render_look_dashboard(
+                con,
+                allocated_gpus=get_active_allocated_gpus(),
+                thresholds=get_thresholds(),
+            )
+        elif sub in ("config", "cfg", "settings", "threshold", "thresholds"):
+            return self._handle_config(sub_args, con)
+        elif sub in ("limit", "concurrency"):
+            return self._handle_limit(sub_args, con)
+        elif sub in ("interval", "tick"):
+            return self._handle_interval(sub_args, con)
+        elif sub in ("pending", "staged"):
+            return self._handle_pending(sub_args, con)
+        elif sub in ("status", "st"):
             return self._handle_status(sub_args, con)
         elif sub in ("add", "run", "enqueue"):
             return self._handle_add(sub_args, con)
@@ -264,56 +346,52 @@ class QueuePlugin(KapselPlugin):
             return self._run_passthrough(["clean"] + sub_args, con)
         elif sub == "reset":
             return self._run_passthrough(["reset"] + sub_args, con)
-        elif sub in ("parallel", "concurrency"):
+        elif sub in ("parallel",):
             return self._run_passthrough(["parallel"] + sub_args, con)
         elif sub == "group":
             return self._run_passthrough(["group"] + sub_args, con)
         elif sub == "wait":
             return self._run_passthrough(["wait"] + sub_args, con)
         else:
-            # Natural command shortcut: if user enters 'kps auto <cmd...>' directly, treat as 'kps auto add'
+            # Shortcut: treat unknown command as 'add'
             return self._handle_add(args, con)
 
+    handle_auto_command = handle_queue_command
+
     def _render_dashboard(self, con: Console) -> int:
-        """Renders an informative, high-aesthetic status overview and cheat sheet."""
+        """Renders an informative status overview, hardware redundancy snapshot, and command guide."""
         daemon_alive = _is_daemon_alive(self.pueue_bin) if self.pueue_bin else False
+        header_status = "[bold #10b981]🟢 Active (Running)[/]" if daemon_alive else "[bold #f43f5e]⚪ Inactive[/]"
 
-        header_status = "[bold #10b981]🟢 Active (Running)[/]" if daemon_alive else "[bold #f43f5e]⚪ Inactive (Auto-starts on demand)[/]"
-
-        con.print("\n[bold #00f0ff]🚀 Kapsel Autopilot[/] [dim]— Autonomous Task Queue & Daemon Manager (Pueue)[/]")
+        con.print("\n[bold #00f0ff]🚀 Kapsel Queue[/] [dim]— Resource-Aware Task Governor & Multi-GPU Scheduler[/]")
         con.print(f"[dim]Daemon Service:[/] {header_status}\n")
 
-        # If daemon is alive, show a quick snapshot of active tasks
         if daemon_alive:
             self._render_task_summary(con)
 
         con.print("[bold white]Core Commands:[/]")
-        con.print("  [bold #a855f7]kps auto add <command...>[/]      Enqueue background task (e.g. 'kps auto add cargo build')")
-        con.print("  [bold #a855f7]kps auto status[/]                 View interactive queue status table")
-        con.print("  [bold #a855f7]kps auto log [id][/]               Display full output logs for a task")
-        con.print("  [bold #a855f7]kps auto follow [id][/]            Stream live real-time output (tail -f)")
-        con.print("  [bold #a855f7]kps auto pause [id|group][/]       Pause active execution")
-        con.print("  [bold #a855f7]kps auto start [id|group][/]       Resume queued or paused tasks")
-        con.print("  [bold #a855f7]kps auto restart [id][/]           Re-run completed or failed tasks")
-        con.print("  [bold #a855f7]kps auto kill [id][/]              Terminate a running task")
-        con.print("  [bold #a855f7]kps auto clean[/]                  Remove all finished tasks from history")
-        con.print("  [bold #a855f7]kps auto parallel <count>[/]       Set maximum concurrent tasks")
-        con.print("  [bold #a855f7]kps auto daemon [status|start][/]  Inspect or control background daemon\n")
+        con.print("  [bold #a855f7]kps queue look[/]                     Inspect hardware redundancy (CPU, RAM, GPUs)")
+        con.print("  [bold #a855f7]kps queue config[/]                   View or adjust resource thresholds & limits")
+        con.print("  [bold #a855f7]kps queue add [cmd][/]                 Enqueue task (default condition: look)")
+        con.print("  [bold #a855f7]kps queue add [cond] [cmd][/]          Enqueue task with extra condition")
+        con.print("  [bold #a855f7]kps queue add ... --gpu {gpu}[/]       Auto-match and allocate idle GPU (0, 1...)")
+        con.print("  [bold #a855f7]kps queue status[/]                   View active execution & pending queue")
+        con.print("  [bold #a855f7]kps queue limit [N][/]                 View or set max concurrent running tasks (default 4)")
+        con.print("  [bold #a855f7]kps queue interval [N]s[/]             View or set scheduler polling interval")
+        con.print("  [bold #a855f7]kps queue follow [id][/]              Stream live real-time output (tail -f)")
+        con.print("  [bold #a855f7]kps queue log [id][/]                 Display output logs for a task")
+        con.print("  [bold #a855f7]kps queue pause [id][/]               Pause active execution")
+        con.print("  [bold #a855f7]kps queue start [id][/]               Resume paused task")
+        con.print("  [bold #a855f7]kps queue kill [id][/]                Terminate a running task\n")
         return 0
 
     def _render_task_summary(self, con: Console) -> None:
-        """Parses JSON from pueue status and renders task counts."""
+        """Parses JSON from pueue status and renders summary."""
         try:
-            res = subprocess.run(
-                [self.pueue_bin, "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=1.0,
-            )
+            res = subprocess.run([self.pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=1.0)
             if res.returncode == 0 and res.stdout.strip():
                 data = json.loads(res.stdout)
                 tasks: Dict[str, Any] = data.get("tasks", {})
-                groups: Dict[str, Any] = data.get("groups", {})
 
                 running_count = 0
                 queued_count = 0
@@ -321,6 +399,8 @@ class QueuePlugin(KapselPlugin):
                 failed_count = 0
 
                 for t in tasks.values():
+                    if t.get("group") == "_scheduler":
+                        continue
                     st = t.get("status", {})
                     if "Running" in st:
                         running_count += 1
@@ -333,15 +413,24 @@ class QueuePlugin(KapselPlugin):
                         else:
                             failed_count += 1
 
-                total = len(tasks)
+                pending_tasks = list_pending_tasks()
+                pending_count = len(pending_tasks)
+                max_run = get_max_running()
+
+                # Hardware summary
+                cpu = probe_cpu()
+                mem = probe_memory()
+                gpus = probe_all_gpus()
+                gpu_summary = f"{len(gpus)} GPU(s)" if gpus else "No GPU"
+
                 con.print(
                     Panel(
-                        f"[white]Total Tasks:[/] [bold]{total}[/]  │  "
-                        f"[bold #10b981]Running: {running_count}[/]  │  "
-                        f"[bold #f59e0b]Queued: {queued_count}[/]  │  "
+                        f"[white]Active Running:[/] [bold #10b981]{running_count} / {max_run} max[/]  │  "
+                        f"[white]Pending in Staging:[/] [bold #f59e0b]{pending_count}[/]  │  "
                         f"[bold #38bdf8]Done: {done_count}[/]  │  "
-                        f"[bold #f43f5e]Failed: {failed_count}[/]",
-                        title="[bold #00f0ff]📊 Task Queue Overview[/]",
+                        f"[bold #f43f5e]Failed: {failed_count}[/]\n"
+                        f"[dim]Environment:[/] CPU: {cpu['percent']:.0f}%  RAM Free: {mem['available_gb']:.1f}GB  GPUs: {gpu_summary}",
+                        title="[bold #00f0ff]📊 Task Queue & Resource Governor Overview[/]",
                         border_style="#0891b2",
                         expand=False,
                     )
@@ -349,145 +438,366 @@ class QueuePlugin(KapselPlugin):
         except Exception:
             pass
 
-    handle_auto_command = handle_queue_command
+    def _handle_config(self, args: List[str], con: Console) -> int:
+        """
+        Views or updates queue scheduler configuration:
+        - Max concurrency limit (e.g. 4)
+        - Scheduler check interval (e.g. 5s)
+        - Minimum free RAM threshold (supports numerical '1.0GB' or percentage '10%')
+        - Minimum free GPU VRAM threshold (supports numerical '2.0GB' or percentage '20%')
+        - Minimum free CPU threshold (supports '15%')
+        """
+        cfg = get_config()
+
+        if not args:
+            table = Table(
+                title="[bold #00f0ff]⚙️ Kapsel Queue Scheduler Configuration[/]",
+                border_style="#0891b2",
+                header_style="bold #38bdf8",
+                expand=False,
+            )
+            table.add_column("Parameter", style="bold #a855f7", no_wrap=True)
+            table.add_column("Current Value", style="bold white")
+            table.add_column("Description", style="dim")
+
+            table.add_row(
+                "max_running (limit)",
+                str(cfg["max_running"]),
+                "Maximum concurrent tasks executing simultaneously (default 4)",
+            )
+            table.add_row(
+                "interval",
+                f"{cfg['interval_seconds']}s",
+                "Periodic scheduler check and polling interval (default 5s)",
+            )
+            table.add_row(
+                "min_free_ram",
+                str(cfg["min_free_ram"]),
+                "Minimum system free RAM required (supports '1.0GB', '512MB', or '10%')",
+            )
+            table.add_row(
+                "min_free_vram",
+                str(cfg["min_free_vram"]),
+                "Minimum GPU free VRAM required per card (supports '2.0GB' or '15%')",
+            )
+            table.add_row(
+                "min_free_cpu",
+                str(cfg["min_free_cpu"]),
+                "Minimum idle CPU percentage required (default '15%')",
+            )
+
+            con.print()
+            con.print(table)
+            con.print("\n[bold white]Modify configuration examples:[/]")
+            con.print("  [bold #00f0ff]kps queue config --min-ram 1.0GB[/]    (or '10%')")
+            con.print("  [bold #00f0ff]kps queue config --min-vram 2.0GB[/]   (or '20%')")
+            con.print("  [bold #00f0ff]kps queue config --min-cpu 10%[/]")
+            con.print("  [bold #00f0ff]kps queue config --limit 4[/]")
+            con.print("  [bold #00f0ff]kps queue config --interval 3s[/]\n")
+            return 0
+
+        # Parse key-value or flag arguments
+        updates: Dict[str, Any] = {}
+        idx = 0
+        while idx < len(args):
+            arg = args[idx]
+            if arg.startswith("--"):
+                key = arg[2:]
+                if idx + 1 < len(args) and not args[idx + 1].startswith("--"):
+                    updates[key] = args[idx + 1]
+                    idx += 2
+                    continue
+                else:
+                    con.print(f"[bold #f43f5e]Missing value for option:[/] {arg}")
+                    return 1
+            elif idx + 1 < len(args):
+                updates[arg] = args[idx + 1]
+                idx += 2
+                continue
+            else:
+                con.print(f"[bold #f43f5e]Invalid configuration argument:[/] {arg}")
+                return 1
+
+        if updates:
+            new_cfg = update_config(updates)
+            con.print("[bold #10b981]✔ Scheduler configuration updated successfully:[/]")
+            for k, v in updates.items():
+                con.print(f"  [cyan]{k}:[/] [bold white]{v}[/]")
+            tick(self.pueue_bin)
+            return 0
+
+        return 0
+
+    def _handle_limit(self, args: List[str], con: Console) -> int:
+        """Views or sets the maximum concurrent running task limit."""
+        if not args:
+            cur = get_max_running()
+            con.print(f"[bold #00f0ff]Max Concurrency Limit:[/] [bold white]{cur}[/] [dim](default: 4)[/]")
+            con.print("[dim]Set limit using:[/] [bold #a855f7]kps queue limit <count>[/]")
+            return 0
+
+        try:
+            val = int(args[0])
+            if val < 1:
+                con.print("[bold #f43f5e]Error:[/] Limit must be at least 1.")
+                return 1
+            set_max_running(val)
+            con.print(f"[bold #10b981]✔ Max concurrent running tasks set to:[/] [bold white]{val}[/]")
+            # Immediately trigger tick with new limit
+            tick(self.pueue_bin)
+            return 0
+        except ValueError:
+            con.print(f"[bold #f43f5e]Invalid number:[/] '{args[0]}'")
+            return 1
+
+    def _handle_interval(self, args: List[str], con: Console) -> int:
+        """Views or sets the periodic scheduler check interval."""
+        if not args:
+            cur = get_check_interval()
+            con.print(f"[bold #00f0ff]Scheduler Polling Interval:[/] [bold white]{cur}s[/] [dim](default: 5s)[/]")
+            con.print("[dim]Set interval using:[/] [bold #a855f7]kps queue interval <seconds>[/]")
+            return 0
+
+        try:
+            val_str = args[0].lower().rstrip("s")
+            val = int(val_str)
+            if val < 1:
+                con.print("[bold #f43f5e]Error:[/] Interval must be at least 1 second.")
+                return 1
+            set_check_interval(val)
+            con.print(f"[bold #10b981]✔ Scheduler check interval set to:[/] [bold white]{val}s[/]")
+            return 0
+        except ValueError:
+            con.print(f"[bold #f43f5e]Invalid seconds value:[/] '{args[0]}'")
+            return 1
+
+    def _handle_pending(self, args: List[str], con: Console) -> int:
+        """Lists or removes tasks in the pending staging queue."""
+        if args and args[0].lower() in ("rm", "remove", "del", "delete") and len(args) > 1:
+            target_id = args[1]
+            ok = remove_pending_task(target_id)
+            if ok:
+                con.print(f"[bold #10b981]✔ Removed pending task:[/] {target_id}")
+            else:
+                con.print(f"[bold #f43f5e]Pending task not found:[/] {target_id}")
+            return 0
+
+        pending_tasks = list_pending_tasks()
+        if not pending_tasks:
+            con.print("[dim]No tasks currently waiting in pending queue.[/]")
+            return 0
+
+        table = Table(
+            title="[bold #f59e0b]⏳ Pending Tasks in Staging Queue[/]",
+            border_style="#f59e0b",
+            header_style="bold #38bdf8",
+            expand=False,
+        )
+        table.add_column("Pending ID", justify="right", style="bold #a855f7")
+        table.add_column("Command Template", justify="left", style="white")
+        table.add_column("Extra Condition", justify="left", style="dim")
+        table.add_column("Requires GPU", justify="center")
+
+        for pt in pending_tasks:
+            has_gpu = bool(re.search(r"\{gpu\}", pt.command_template, re.IGNORECASE))
+            gpu_badge = "[bold #00f0ff]⚡ {gpu}[/]" if has_gpu else "[dim]CPU[/]"
+            cond_display = pt.condition or "[dim](look default)[/]"
+            table.add_row(pt.id, pt.command_template, cond_display, gpu_badge)
+
+        con.print()
+        con.print(table)
+        con.print("[dim]Tasks will auto-dispatch when hardware resources, idle GPU, or conditions are met.[/]\n")
+        return 0
+
+    def _handle_add(self, args: List[str], con: Console) -> int:
+        """
+        Enqueues a task using bracket syntax or interactive prompt.
+        Supports:
+        - kps queue add [condition] [command]
+        - kps queue add [command]
+        - Interactive 2-step prompt if no arguments provided
+        - Standard command fallback
+        """
+        command: Optional[str] = None
+        condition: Optional[str] = None
+
+        # 1. Bracket syntax detection (e.g. kps queue add [condition] [command])
+        raw_args_line = " ".join(args).strip()
+        brackets = re.findall(r"\[(.*?)\]", raw_args_line)
+
+        if len(brackets) >= 2:
+            condition = brackets[0].strip()
+            command = brackets[1].strip()
+        elif len(brackets) == 1:
+            condition = None
+            command = brackets[0].strip()
+        elif not args:
+            # 2. Interactive 2-Step Prompt
+            con.print("\n[bold #00f0ff]⚡ Kapsel Queue · Task Enqueue Wizard[/]")
+            con.print("[dim]Add a background command with resource checking & {gpu} matching (Ctrl+C to cancel)[/]\n")
+            try:
+                from prompt_toolkit import prompt
+
+                # Step 1: Command
+                command_in = prompt("Command to execute: ").strip()
+                if not command_in:
+                    con.print("[dim]Cancelled.[/]")
+                    return 0
+                command = command_in
+
+                # Step 2: Extra condition
+                cond_in = prompt("Extra condition (Optional, press Enter for default 'look' check): ").strip()
+                condition = cond_in if cond_in else None
+            except Exception:
+                con.print("[bold #f43f5e]Interactive prompt interrupted.[/]")
+                return 1
+        else:
+            # 3. Standard CLI flags or direct command line
+            if "--if" in args:
+                idx = args.index("--if")
+                if idx + 1 < len(args):
+                    condition = args[idx + 1]
+                    cmd_parts = args[:idx] + args[idx + 2 :]
+                    command = " ".join(cmd_parts).strip()
+                else:
+                    command = " ".join(args).strip()
+            else:
+                command = " ".join(args).strip()
+
+        if not command:
+            con.print("[bold #f43f5e]Error:[/] Command cannot be empty.")
+            return 1
+
+        # Enqueue into smart pending queue
+        task = add_pending_task(command_template=command, condition=condition)
+
+        # Trigger scheduler tick immediately
+        dispatched = tick(self.pueue_bin)
+
+        # Check if the newly added task was dispatched right away
+        dispatched_this = [d for d in dispatched if d[0].id == task.id]
+        if dispatched_this:
+            dispatched_task, pueue_id = dispatched_this[0]
+            gpu_msg = f" (Allocated GPU {dispatched_task.allocated_gpu})" if dispatched_task.allocated_gpu is not None else ""
+            con.print(f"[bold #10b981]✔ Auto-dispatched task #{pueue_id}{gpu_msg}:[/] [white]{command}[/]")
+            con.print("[dim]View live stream with:[/] [bold #00f0ff]kps queue follow[/]")
+            con.print("[dim]Check status with:[/] [bold #00f0ff]kps queue status[/]\n")
+        else:
+            has_gpu = bool(re.search(r"\{gpu\}", command, re.IGNORECASE))
+            reason = "Waiting for idle GPU" if has_gpu else "Waiting for resource redundancy / condition"
+            con.print(f"[bold #f59e0b]⏳ Enqueued task [{task.id}] in Pending Staging Queue[/]")
+            con.print(f"[dim]Command:[/] [white]{command}[/]")
+            if condition:
+                con.print(f"[dim]Condition:[/] [cyan]{condition}[/] + look")
+            else:
+                con.print("[dim]Condition:[/] look (CPU < 85%, RAM > 1.5GB, Idle GPU)")
+            con.print(f"[dim]Status:[/] {reason}. Pueue scheduler will dispatch it automatically.\n")
+
+        return 0
 
     def _handle_status(self, args: List[str], con: Console) -> int:
-        """Displays status table or passes through raw JSON."""
+        """Displays full task status: resource overview, running tasks, and pending queue."""
         if "--json" in args or "-j" in args:
             return self._run_passthrough(["status"] + args, con)
 
         try:
-            res = subprocess.run(
-                [self.pueue_bin, "status", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=1.5,
-            )
+            res = subprocess.run([self.pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=1.5)
             if res.returncode != 0 or not res.stdout.strip():
                 return self._run_passthrough(["status"], con)
 
             data = json.loads(res.stdout)
             tasks: Dict[str, Any] = data.get("tasks", {})
-            groups: Dict[str, Any] = data.get("groups", {})
+            sched_state = load_state()
+            active_allocs = sched_state.get("active_allocations", {})
 
-            if not tasks:
-                con.print("\n[dim]Task queue is currently empty.[/]")
-                con.print("[dim]Enqueue a new background task with:[/] [bold #00f0ff]kps auto add <command>[/]\n")
-                return 0
-
-            table = Table(
-                title="[bold #00f0ff]🚀 Autopilot Task Queue[/]",
-                border_style="#0891b2",
-                header_style="bold #38bdf8",
-                expand=False,
+            # 1. Hardware Resource Summary bar
+            cpu = probe_cpu()
+            mem = probe_memory()
+            gpus = probe_all_gpus()
+            gpu_status_str = f"{len(gpus)} GPU(s)" if gpus else "No GPU"
+            con.print(
+                f"[dim]Resources:[/] CPU: [bold]{cpu['percent']:.1f}%[/] │ "
+                f"RAM Free: [bold]{mem['available_gb']:.1f} GB[/] │ "
+                f"GPUs: [bold]{gpu_status_str}[/] │ "
+                f"Max Running: [bold]{get_max_running()}[/]"
             )
-            table.add_column("ID", justify="right", style="bold #a855f7")
-            table.add_column("Status", justify="left")
-            table.add_column("Command", justify="left", style="white")
-            table.add_column("Group", justify="center", style="dim")
-            table.add_column("Path", justify="left", style="dim")
 
-            for tid, t in sorted(tasks.items(), key=lambda item: int(item[0])):
-                st_obj = t.get("status", {})
-                if "Running" in st_obj:
-                    status_text = "[bold #10b981]🟢 Running[/]"
-                elif "Queued" in st_obj:
-                    status_text = "[bold #f59e0b]🟡 Queued[/]"
-                elif "Paused" in st_obj:
-                    status_text = "[bold #eab308]⏸️  Paused[/]"
-                elif "Done" in st_obj:
-                    res_val = st_obj["Done"].get("result")
-                    if res_val == "Success":
-                        status_text = "[bold #38bdf8]✔  Done[/]"
+            # 2. Pueue Active Tasks Table
+            active_tasks = {k: v for k, v in tasks.items() if v.get("group") != "_scheduler"}
+
+            if active_tasks:
+                table = Table(
+                    title="[bold #00f0ff]🚀 Active Pueue Execution Queue[/]",
+                    border_style="#0891b2",
+                    header_style="bold #38bdf8",
+                    expand=False,
+                )
+                table.add_column("ID", justify="right", style="bold #a855f7")
+                table.add_column("Status", justify="left")
+                table.add_column("GPU", justify="center")
+                table.add_column("Command", justify="left", style="white")
+                table.add_column("Group", justify="center", style="dim")
+
+                for tid, t in sorted(active_tasks.items(), key=lambda item: int(item[0])):
+                    st_obj = t.get("status", {})
+                    if "Running" in st_obj:
+                        status_text = "[bold #10b981]🟢 Running[/]"
+                    elif "Queued" in st_obj:
+                        status_text = "[bold #f59e0b]🟡 Queued[/]"
+                    elif "Paused" in st_obj:
+                        status_text = "[bold #eab308]⏸️  Paused[/]"
+                    elif "Done" in st_obj:
+                        res_val = st_obj["Done"].get("result")
+                        if res_val == "Success":
+                            status_text = "[bold #38bdf8]✔  Done[/]"
+                        else:
+                            status_text = f"[bold #f43f5e]❌ Failed ({res_val})[/]"
                     else:
-                        status_text = f"[bold #f43f5e]❌ Failed ({res_val})[/]"
-                else:
-                    status_text = f"[dim]{list(st_obj.keys())[0] if st_obj else 'Unknown'}[/]"
+                        status_text = f"[dim]{list(st_obj.keys())[0] if st_obj else 'Unknown'}[/]"
 
-                cmd_text = t.get("command", "")
-                if len(cmd_text) > 50:
-                    cmd_text = cmd_text[:47] + "..."
+                    # Check if this task was allocated a specific GPU
+                    gpu_idx = active_allocs.get(str(tid))
+                    gpu_badge = f"[bold #00f0ff]GPU {gpu_idx}[/]" if gpu_idx is not None else "[dim]-[/]"
 
-                grp = t.get("group", "default")
-                p_str = t.get("path", "")
-                if len(p_str) > 35:
-                    p_str = "..." + p_str[-32:]
+                    cmd_text = t.get("command", "")
+                    if len(cmd_text) > 55:
+                        cmd_text = cmd_text[:52] + "..."
 
-                table.add_row(str(tid), status_text, cmd_text, grp, p_str)
+                    grp = t.get("group", "default")
+                    table.add_row(str(tid), status_text, gpu_badge, cmd_text, grp)
 
-            con.print()
-            con.print(table)
-            con.print("\n[dim]Use 'kps auto log <id>' or 'kps auto follow <id>' to inspect output.[/]\n")
+                con.print()
+                con.print(table)
+            else:
+                con.print("\n[dim]No active tasks executing in Pueue queue.[/]")
+
+            # 3. Pending Staging Queue Table
+            pending_tasks = list_pending_tasks()
+            if pending_tasks:
+                p_table = Table(
+                    title="[bold #f59e0b]⏳ Pending Tasks Waiting for Hardware Resources / Idle GPU[/]",
+                    border_style="#f59e0b",
+                    header_style="bold #38bdf8",
+                    expand=False,
+                )
+                p_table.add_column("Staging ID", justify="right", style="bold #a855f7")
+                p_table.add_column("Command Template", justify="left", style="white")
+                p_table.add_column("Condition", justify="left", style="dim")
+                p_table.add_column("Requires GPU", justify="center")
+
+                for pt in pending_tasks:
+                    has_gpu = bool(re.search(r"\{gpu\}", pt.command_template, re.IGNORECASE))
+                    gpu_badge = "[bold #00f0ff]⚡ {gpu}[/]" if has_gpu else "[dim]CPU[/]"
+                    cond_str = pt.condition or "[dim](look)[/]"
+                    p_table.add_row(pt.id, pt.command_template, cond_str, gpu_badge)
+
+                con.print()
+                con.print(p_table)
+
+            con.print("\n[dim]Commands: 'kps queue look' (probe) │ 'kps queue follow <id>' │ 'kps queue log <id>'[/]\n")
             return 0
         except Exception:
             return self._run_passthrough(["status"] + args, con)
-
-    def _handle_add(self, args: List[str], con: Console) -> int:
-        """Enqueues a task for execution."""
-        if not args:
-            con.print("[bold #f43f5e]Error:[/] Please specify a command to enqueue.")
-            con.print("[dim]Usage:[/] [bold #00f0ff]kps auto add <command...>[/]\n")
-            return 1
-
-        # Check if user already provided '--'
-        if "--" in args:
-            cmd_args = ["add"] + args
-        else:
-            # Separate options from the command
-            opts: List[str] = []
-            cmd_parts: List[str] = []
-            idx = 0
-            while idx < len(args):
-                arg = args[idx]
-                if arg in ("-g", "--group", "-l", "--label", "-d", "--delay", "-p", "--priority"):
-                    opts.append(arg)
-                    if idx + 1 < len(args):
-                        opts.append(args[idx + 1])
-                        idx += 2
-                        continue
-                elif arg.startswith("-"):
-                    opts.append(arg)
-                else:
-                    cmd_parts = args[idx:]
-                    break
-                idx += 1
-
-            if not cmd_parts:
-                cmd_parts = args
-
-            cmd_args = ["add"] + opts + ["--"] + cmd_parts
-
-        # Warn if command seems inherently interactive
-        cmd_str = " ".join(cmd_parts).lower()
-        if (
-            cmd_str.strip() in ("python", "python3", "node", "bash", "sh", "zsh", "pwsh", "powershell", "cmd")
-            or (cmd_str.startswith("npm init") and "-y" not in cmd_str)
-            or (cmd_str.startswith("yarn init") and "-y" not in cmd_str)
-            or (cmd_str.startswith("pnpm init") and "-y" not in cmd_str)
-        ):
-            con.print("[yellow]Notice:[/] [dim]Background tasks run non-interactively. Ensure commands do not require user prompts/TTY.[/]")
-
-        try:
-            res = subprocess.run(
-                [self.pueue_bin] + cmd_args,
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
-            )
-            output = res.stdout.strip() or res.stderr.strip()
-            if res.returncode == 0:
-                con.print(f"[bold #10b981]✔ Task enqueued successfully.[/]")
-                if output:
-                    con.print(f"[dim]{output}[/]")
-                con.print("[dim]View status with:[/] [bold #00f0ff]kps auto status[/]")
-                con.print("[dim]Stream output with:[/] [bold #00f0ff]kps auto follow[/]\n")
-                return 0
-            else:
-                con.print(f"[bold #f43f5e]Failed to enqueue task:[/] {output}")
-                return res.returncode
-        except Exception as e:
-            con.print(f"[bold #f43f5e]Execution error:[/] {e}")
-            return 1
 
     def _handle_daemon_subcommand(self, args: List[str], con: Console) -> int:
         """Handles daemon management subcommands."""
@@ -499,7 +809,7 @@ class QueuePlugin(KapselPlugin):
                 con.print("[bold #10b981]🟢 Pueue daemon (pueued) is active and running.[/]")
             else:
                 con.print("[yellow]⚪ Pueue daemon (pueued) is stopped.[/]")
-                con.print("[dim]Start it with:[/] [bold #00f0ff]kps auto daemon start[/]")
+                con.print("[dim]Start it with:[/] [bold #00f0ff]kps queue daemon start[/]")
             return 0
 
         elif action == "start":
@@ -539,7 +849,7 @@ class QueuePlugin(KapselPlugin):
 
     def provide_completions(self, text_before_cursor: str) -> List[Dict[str, Any]]:
         """
-        Dynamically generates completions for 'kps auto' / 'kapsel auto'.
+        Dynamically generates completions for 'kps queue' / 'kps auto'.
         Extracts subcommands and active task IDs from Pueue JSON.
         """
         command_line = text_before_cursor
@@ -549,7 +859,6 @@ class QueuePlugin(KapselPlugin):
         if not tokens:
             return []
 
-        # Check if line is targeting 'queue' or 'auto'
         first = tokens[0].lower()
         if first in ("kps", "kapsel") and len(tokens) >= 2 and tokens[1].lower() in ("queue", "auto"):
             auto_args = tokens[2:]
@@ -558,10 +867,14 @@ class QueuePlugin(KapselPlugin):
         else:
             return []
 
-        # Case 1: Core Subcommands completion (e.g. 'kps auto <Tab>' or 'kps auto l<Tab>')
+        # Case 1: Core Subcommands completion
         subcommands = [
-            ("add", "Enqueue a command for background execution"),
-            ("status", "Display full task queue status"),
+            ("add", "Enqueue task with resource checking & {gpu} matching"),
+            ("look", "Inspect hardware resource redundancy (CPU, RAM, GPUs)"),
+            ("status", "Display full task queue status and pending tasks"),
+            ("limit", "View or adjust maximum concurrent running tasks"),
+            ("interval", "View or adjust periodic scheduler check interval"),
+            ("pending", "View and manage tasks waiting in pending queue"),
             ("log", "Display output log for a specific task"),
             ("follow", "Stream real-time log output for a running task"),
             ("pause", "Pause running tasks or entire groups"),
@@ -570,8 +883,6 @@ class QueuePlugin(KapselPlugin):
             ("kill", "Terminate running task(s) or whole groups"),
             ("clean", "Remove finished/successful tasks from history"),
             ("reset", "Kill all running tasks and reset entire queue"),
-            ("parallel", "Adjust maximum concurrent worker tasks"),
-            ("group", "Manage task groups and queues"),
             ("daemon", "Manage Pueue background service (status, start, stop)"),
         ]
 
@@ -588,7 +899,7 @@ class QueuePlugin(KapselPlugin):
                 if name.startswith(prefix)
             ]
 
-        # Case 2: Dynamic completions for task IDs (e.g. 'kps auto log <Tab>', 'kps auto follow <Tab>', 'kps auto kill <Tab>')
+        # Case 2: Dynamic completions for task IDs
         sub = auto_args[0].lower() if auto_args else ""
         if sub in ("log", "follow", "kill", "restart", "pause", "start", "tail") and (
             (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
@@ -596,7 +907,7 @@ class QueuePlugin(KapselPlugin):
             target_prefix = auto_args[1].lower() if len(auto_args) == 2 else ""
             return self._query_task_id_completions(target_prefix)
 
-        # Case 3: Daemon subcommands ('kps auto daemon <Tab>')
+        # Case 3: Daemon subcommands
         if sub == "daemon" and (
             (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
         ):
@@ -641,6 +952,8 @@ class QueuePlugin(KapselPlugin):
             results: List[Dict[str, Any]] = []
 
             for tid_str, t in sorted(tasks.items(), key=lambda item: int(item[0]), reverse=True):
+                if t.get("group") == "_scheduler":
+                    continue
                 if not tid_str.startswith(prefix):
                     continue
 
@@ -673,4 +986,3 @@ class QueuePlugin(KapselPlugin):
 # Backward compatibility and Kapsel plugin export
 AutopilotPlugin = QueuePlugin
 Plugin = QueuePlugin
-

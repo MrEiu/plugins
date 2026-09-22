@@ -1,14 +1,19 @@
 {
   "_ai_directive": "MANDATORY FOR AI ASSISTANTS: Whenever you modify any plugin, you MUST increment its version by at least one patch step following base-10 decimal rollover at 9 (e.g. 0.1.8 -> 0.1.9 -> 0.2.0, 0.2.9 -> 0.3.0). You MUST synchronize the incremented version in the plugin's manifest (plugin.py) and record both the new version and changelog in this catalog.json.",
   "ai": {
-    "version": "0.1.7",
+    "version": "0.1.8",
     "description": "Native terminal AI assistant powered by OpenAI Python SDK with pure CLI interactive tools.",
-    "changelog": "Added AI-driven Carapace completion specification generator (kps ai spec <tool>) and lightweight background auto-learning hook for uncataloged CLI tools with anti-misjudgment guardrails."
+    "changelog": "Enhanced Carapace spec generator with strict schema prompt constraints, automated Windows slash/flag sanitizer, short-flag-first sorting, duplicate shorthand deduplication, and positional file completion defaults."
   },
   "alias": {
-    "version": "0.2.2",
+    "version": "0.2.5",
     "description": "Multi-terminal command mapping translating universal aliases to host shell commands.",
-    "changelog": "Added multi-language Carapace completion specifications across 7 languages."
+    "changelog": "Added interactive prompt autocompletion for both alias triggers and full target shell commands (Carapace-powered) in 'kps alias'."
+  },
+  "aria2": {
+    "version": "0.1.0",
+    "description": "High-speed concurrent download accelerator powered by aria2c (-s 16, -x 16, -j 4).",
+    "changelog": "Initial release: multi-threaded concurrent download accelerator with default -s 16, -x 16, -j 4, and persistent config."
   },
   "autopilot": {
     "version": "0.2.1",
@@ -16,9 +21,9 @@
     "changelog": "Rewritten with PM2 as core engine: polyglot runtimes, cluster mode, zero-downtime reload, and dynamic autocompletion."
   },
   "queue": {
-    "version": "0.1.2",
-    "description": "Autonomous background task queue and daemon execution manager powered by Pueue.",
-    "changelog": "Renamed from autopilot to queue (kps queue), added backward compatibility alias."
+    "version": "0.1.4",
+    "description": "Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
+    "changelog": "Removed automatic CUDA_VISIBLE_DEVICES injection to avoid PyTorch device index conflicts, added numerical (e.g. 1.0GB, 512MB) and percentage (e.g. 15%) minimum free threshold compatibility in 'look', and added 'kps queue config' to configure all thresholds and limits."
   },
   "fuck": {
     "version": "0.1.0",
@@ -36,14 +41,14 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "install": {
-    "version": "0.2.5",
-    "description": "Unified cross-platform package installer powered by meta-package-manager (mpm) with concurrent streaming search, interactive confirmation, and post-install inspection.",
-    "changelog": "Upgraded to fully adaptive prompt_toolkit layout: dynamically responsive columns, guaranteed 100% closed borders, and zero text overflow."
+    "version": "0.2.8",
+    "description": "Unified cross-platform package installer powered by kapsel-mpm and meta-package-manager with platform lock bypass, custom manager paths, dynamic priority, and batch adapter.",
+    "changelog": "Integrated dedicated kapsel-mpm custom engine with platform hard-lock bypass (e.g. brew on Windows), KAPSEL_MPM_<ID>_PATH environment injection, and Windows UTF-8 safety."
   },
   "kssh": {
-    "version": "0.1.0",
-    "description": "Ergonomic SSH companion with portable host history, in-session Alt+S hotkey menu (file upload to remote PWD with collision prompts & bidirectional port forwarding), and transparent signal passthrough.",
-    "changelog": "Initial release: compact 4-host history picker, in-session Alt+S hotkey menu, upload to remote PWD with collision prompts, bidirectional port forwarding (default remote->local, 'r' for local->remote), and seamless terminal/signal passthrough."
+    "version": "0.1.4",
+    "description": "Ergonomic SSH & WSL companion with portable host history, in-session hotkey operations (Alt+S), file transfer, port forwarding tunnels, and transparent signal passthrough.",
+    "changelog": "Removed experimental input bar and bar toggle commands; streamlined session management with native terminal passthrough and retained bidirectional WSL compatibility."
   },
   "portal": {
     "version": "0.1.6",
@@ -66,9 +71,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "preview": {
-    "version": "0.2.0",
-    "description": "Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), native 3-column Miller Columns file manager (fm), and paginated TUI viewer container.",
-    "changelog": "Changed image previews from Chafa character art to native Sixel graphics output."
+    "version": "0.2.6",
+    "description": "Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), and native 3-column Miller Columns file manager (fm).",
+    "changelog": "Configured cross-platform 7-Zip binary mapping (7z on Windows, 7zz on Unix) in declarative tools.yaml and added apt package support."
   },
   "update": {
     "version": "0.1.0",

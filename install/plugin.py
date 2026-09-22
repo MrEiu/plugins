@@ -26,10 +26,12 @@ try:
     from .streaming_search import concurrent_streaming_search, SearchItem
     from .interactive import select_package_interactive, search_and_select_interactive
     from .inspector import inspect_installed_package
+    from .batch import install_packages_batch
 except ImportError:
     from plugins.install.streaming_search import concurrent_streaming_search, SearchItem
     from plugins.install.interactive import select_package_interactive, search_and_select_interactive
     from plugins.install.inspector import inspect_installed_package
+    from plugins.install.batch import install_packages_batch
 
 try:
     from kapsel.core.tools.registry import get_tool
@@ -148,20 +150,30 @@ def _sort_managers_by_platform(detected: List[str], platform_key: Optional[str] 
 
 def _resolve_mpm_executable() -> Optional[List[str]]:
     """
-    Locates the meta-package-manager (mpm) CLI executable.
-    Checks PATH first, then Kapsel local bin directory, then python module.
+    Locates the meta-package-manager (mpm) or kapsel-mpm CLI executable.
+    Prioritizes customized 'kapsel-mpm', then local Kapsel bin directory, then system mpm.
     """
-    # 1. System PATH
+    # 1. kapsel-mpm in System PATH
+    kmpm_path = shutil.which("kapsel-mpm") or shutil.which("kmpm")
+    if kmpm_path:
+        return [kmpm_path]
+
+    # 2. Local Kapsel bin directory (~/.kapsel/bin/kapsel-mpm)
+    local_kmpm = get_kapsel_dir() / "bin" / ("kapsel-mpm.exe" if sys.platform == "win32" else "kapsel-mpm")
+    if local_kmpm.exists():
+        return [str(local_kmpm)]
+
+    # 3. Standard mpm in System PATH
     mpm_path = shutil.which("mpm")
     if mpm_path:
         return [mpm_path]
 
-    # 2. Local Kapsel bin directory (~/.kapsel/bin/mpm)
+    # 4. Local Kapsel bin directory (~/.kapsel/bin/mpm)
     local_bin = get_kapsel_dir() / "bin" / ("mpm.exe" if sys.platform == "win32" else "mpm")
     if local_bin.exists():
         return [str(local_bin)]
 
-    # 3. Python environment module (pip)
+    # 5. Python environment module (pip)
     try:
         res = subprocess.run(
             [sys.executable, "-m", "meta_package_manager", "--version"],
@@ -178,17 +190,24 @@ def _resolve_mpm_executable() -> Optional[List[str]]:
     return None
 
 
-def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = None) -> int:
+def _run_mpm_command(
+    subcmd: str,
+    args: List[str],
+    console: Optional[Console] = None,
+    custom_paths: Optional[Dict[str, str]] = None,
+) -> int:
     """
-    Executes an MPM subcommand with forwarded arguments.
-    Prompts the user with installation methods if mpm is not found.
+    Executes an MPM or kapsel-mpm subcommand with forwarded arguments.
+    Prompts the user with installation methods if neither is found.
+    Injects custom package manager paths and environment variables into the execution context.
     """
     con = console or Console(legacy_windows=False)
     mpm_exec = _resolve_mpm_executable()
 
     if not mpm_exec:
-        con.print("[bold #f43f5e]Error:[/] [white]meta-package-manager (mpm) is not installed.[/]")
-        con.print("[dim]Install it via one of the following methods:[/]")
+        con.print("[bold #f43f5e]Error:[/] [white]Neither kapsel-mpm nor meta-package-manager (mpm) is installed.[/]")
+        con.print("[dim]Install kapsel-mpm or mpm via one of the following methods:[/]")
+        con.print("    [bold #00f0ff]pip install kapsel-mpm[/]  (Recommended: tailored for Kapsel)")
         if sys.platform == "win32":
             con.print("    [bold #00f0ff]scoop install main/meta-package-manager[/]  (Scoop)")
         else:
@@ -209,6 +228,20 @@ def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = 
     env = dict(os.environ)
     env["PYTHONUTF8"] = "1"
     env["PYTHONIOENCODING"] = "utf-8"
+
+    # Prepend custom manager executable directories to PATH and set KAPSEL_MPM_<ID>_PATH
+    if custom_paths:
+        dirs_to_add: List[str] = []
+        for mid, p in custom_paths.items():
+            p_path = Path(p)
+            d = str(p_path.parent if p_path.is_file() else p_path)
+            if d not in dirs_to_add and os.path.isdir(d):
+                dirs_to_add.append(d)
+            # Inject direct path variable for kapsel-mpm engine
+            env[f"KAPSEL_MPM_{mid.upper().replace('-', '_')}_PATH"] = str(p_path)
+        if dirs_to_add:
+            env["PATH"] = os.pathsep.join(dirs_to_add) + os.pathsep + env.get("PATH", "")
+
     try:
         # Stream process execution interactively to the terminal
         result = subprocess.run(cmd, env=env)
@@ -216,6 +249,7 @@ def _run_mpm_command(subcmd: str, args: List[str], console: Optional[Console] = 
     except Exception as e:
         con.print(f"[bold #f43f5e]Failed to execute mpm {subcmd}:[/] {e}")
         return 1
+
 
 
 class InstallPlugin(KapselPlugin):
@@ -228,7 +262,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.2.5",
+        version="0.2.8",
         description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
@@ -251,9 +285,13 @@ class InstallPlugin(KapselPlugin):
             name="install",
             handler=self.handle_install,
             help_text="Install package(s) across systems using meta-package-manager",
-            usage="kps install <package_name> [options]",
+            usage="kps install <package_name...> [options]",
             subcommands={
-                "--order": "Show package manager priority order",
+                "add": "Add package manager to active priority list: kps install add <mgr>",
+                "rm": "Remove / disable package manager: kps install rm <mgr>",
+                "order": "View or customize package manager priority order: kps install order [m1 m2...]",
+                "up": "Move package manager up in priority: kps install up <mgr>",
+                "down": "Move package manager down in priority: kps install down <mgr>",
                 "--detect": "Rescan system and update package manager priorities",
                 "--config": "Show path to independent package manager configuration",
             },
@@ -319,6 +357,11 @@ class InstallPlugin(KapselPlugin):
                 with open(config_path, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
                     if isinstance(data, dict) and "managers" in data:
+                        if "custom_paths" not in data or not isinstance(data["custom_paths"], dict):
+                            data["custom_paths"] = {}
+                        for mid, cp in data["custom_paths"].items():
+                            MANAGER_BINARIES[mid] = (Path(cp).name, mid)
+                            MPM_SUPPORTED_SELECTORS.add(mid)
                         self._cached_config = data
                         return data
             except Exception:
@@ -348,6 +391,7 @@ class InstallPlugin(KapselPlugin):
             "version": "1.0",
             "platform": plat_key,
             "auto_detect": True,
+            "custom_paths": {},
             "managers": sorted_managers,
             "disabled": disabled,
         }
@@ -356,6 +400,7 @@ class InstallPlugin(KapselPlugin):
         """Saves configuration to disk with formatted YAML comments."""
         config_path = self.get_config_path()
         plat = config_data.get("platform", _get_current_platform_key())
+        custom_paths = config_data.get("custom_paths", {})
 
         lines = [
             "# ==============================================================================",
@@ -369,9 +414,21 @@ class InstallPlugin(KapselPlugin):
             f'platform: "{plat}"',
             f'auto_detect: {str(config_data.get("auto_detect", True)).lower()}',
             "",
+            "# Custom executable paths for package managers (e.g. scoop: C:\\Users\\...\\scoop.cmd):",
+            "custom_paths:",
+        ]
+        if custom_paths:
+            for k, v in custom_paths.items():
+                escaped_v = yaml.safe_dump(str(v)).strip()
+                lines.append(f"  {k}: {escaped_v}")
+        else:
+            lines.append("  {}")
+
+        lines.extend([
+            "",
             "# Active package manager priority order (highest priority first):",
             "managers:",
-        ]
+        ])
         for m in config_data.get("managers", []):
             lines.append(f"  - {m}")
 
@@ -423,30 +480,67 @@ class InstallPlugin(KapselPlugin):
     # --------------------------------------------------------------------------
 
     def handle_install(self, args: List[str], console: Optional[Console] = None) -> int:
-        """Handles 'kps install' with subcommands: --order, --detect, --config, and post-install inspection."""
+        """Handles 'kps install' with subcommands: add, rm, order, up, down, --detect, --config, and package installations."""
         con = console or Console(legacy_windows=False)
 
+        if not args:
+            return self._show_install_help(con)
+
+        first_arg = args[0].lower()
+
         # 1. Management Subcommands
-        if any(arg in ("--order", "order") for arg in args):
-            return self._show_order(con)
-        if any(arg in ("--detect", "detect", "--rescan") for arg in args):
+        if first_arg in ("--help", "-h"):
+            return self._show_install_help(con)
+        if first_arg == "add":
+            return self._handle_add_manager(args[1:], con)
+        if first_arg in ("rm", "remove", "del", "delete", "disable"):
+            return self._handle_remove_manager(args[1:], con)
+        if first_arg in ("order", "sort"):
+            return self._handle_order_manager(args[1:], con)
+        if first_arg == "up":
+            return self._handle_move_manager(args[1:], direction=-1, con=con)
+        if first_arg == "down":
+            return self._handle_move_manager(args[1:], direction=1, con=con)
+        if first_arg in ("--detect", "detect", "--rescan", "rescan"):
             return self._rescan_managers(con)
-        if any(arg in ("--config", "config") for arg in args):
+        if first_arg in ("--config", "config"):
             con.print(f"[bold #00f0ff]Configuration File:[/] {self.get_config_path()}")
             con.print("[dim]You can edit this YAML file to customize manager priority order.[/]")
             return 0
-        if any(arg in ("--help", "-h") for arg in args) and len(args) == 1:
-            return self._show_install_help(con)
+
+        # Also support legacy flag variants anywhere in args (e.g. kps install --order)
+        if any(arg in ("--order",) for arg in args):
+            return self._show_order(con)
+        if any(arg in ("--detect", "--rescan") for arg in args):
+            return self._rescan_managers(con)
+        if any(arg in ("--config",) for arg in args):
+            con.print(f"[bold #00f0ff]Configuration File:[/] {self.get_config_path()}")
+            return 0
+
+        conf = self.load_config()
+        custom_paths = conf.get("custom_paths", {})
 
         # 2. Package Installation
-        if not args:
+        pkg_names = [a for a in args if not a.startswith("-")]
+        if not pkg_names:
             con.print("[bold #f43f5e]Error:[/] Please specify package name(s) to install.")
-            con.print("[dim]Usage: kps install <package_name> [options][/]")
-            con.print("[dim]       kps install --order   (view manager priority)[/]")
-            con.print("[dim]       kps install --detect  (rescan system managers)[/]\n")
+            con.print("[dim]Usage: kps install <package_name...> [options][/]")
+            con.print("[dim]       kps install add <mgr> [path]  (add package manager)[/]")
+            con.print("[dim]       kps install rm <mgr>          (disable package manager)[/]")
+            con.print("[dim]       kps install order [m1 m2...]  (view or customize priority)[/]\n")
             return 1
 
-        pkg_name = next((a for a in args if not a.startswith("-")), None)
+        # Multi-package workflow (len(pkg_names) > 1):
+        # Automatically routes to MultiPackageInstaller for concurrent/parallel delivery!
+        if len(pkg_names) > 1:
+            return install_packages_batch(
+                packages=pkg_names,
+                args=args,
+                plugin=self,
+                console=con,
+            )
+
+        pkg_name = pkg_names[0]
 
         # 2a. Check if tool is declared in Kapsel declarative tool registry (tools.yaml)
         if pkg_name and get_tool and not any(a.startswith("--") for a in args):
@@ -485,7 +579,7 @@ class InstallPlugin(KapselPlugin):
                 if selected:
                     con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
                     install_args = [f"--{selected.manager}", selected.package_id]
-                    ret = _run_mpm_command("install", install_args, con)
+                    ret = _run_mpm_command("install", install_args, con, custom_paths=custom_paths)
                     if ret == 0:
                         inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
                     return ret
@@ -494,7 +588,7 @@ class InstallPlugin(KapselPlugin):
                     return 0
 
         forwarded_args = self._inject_priority_args(args)
-        ret = _run_mpm_command("install", forwarded_args, con)
+        ret = _run_mpm_command("install", forwarded_args, con, custom_paths=custom_paths)
         if ret == 0 and pkg_name and not any(a in ("--dry-run", "-h", "--help") for a in args):
             detected_mgr = "mpm"
             for a in forwarded_args:
@@ -507,8 +601,10 @@ class InstallPlugin(KapselPlugin):
     def handle_update(self, args: List[str], console: Optional[Console] = None) -> int:
         """Handles 'kps update' with priority injection."""
         con = console or Console(legacy_windows=False)
+        conf = self.load_config()
+        custom_paths = conf.get("custom_paths", {})
         forwarded_args = self._inject_priority_args(args)
-        return _run_mpm_command("upgrade", forwarded_args, con)
+        return _run_mpm_command("upgrade", forwarded_args, con, custom_paths=custom_paths)
 
     def handle_search(self, args: List[str], console: Optional[Console] = None) -> int:
         """
@@ -516,6 +612,9 @@ class InstallPlugin(KapselPlugin):
         and optional secondary interactive confirmation.
         """
         con = console or Console(legacy_windows=False)
+        conf = self.load_config()
+        custom_paths = conf.get("custom_paths", {})
+
         if not args:
             con.print("[bold #f43f5e]Error:[/] Please specify a search query.")
             con.print("[dim]Usage: kps search <query> [options][/]\n")
@@ -525,7 +624,7 @@ class InstallPlugin(KapselPlugin):
         if any(a in ("--raw", "--plain", "--columns") for a in args):
             forwarded_args = [a for a in args if a not in ("--raw", "--plain")]
             forwarded_args = self._inject_priority_args(forwarded_args)
-            return _run_mpm_command("search", forwarded_args, con)
+            return _run_mpm_command("search", forwarded_args, con, custom_paths=custom_paths)
 
         mpm_exec = _resolve_mpm_executable()
         if not mpm_exec:
@@ -534,7 +633,7 @@ class InstallPlugin(KapselPlugin):
 
         query = " ".join([a for a in args if not a.startswith("-")])
         if not query:
-            return _run_mpm_command("search", args, con)
+            return _run_mpm_command("search", args, con, custom_paths=custom_paths)
 
         active_managers = self.get_active_managers()
 
@@ -549,7 +648,7 @@ class InstallPlugin(KapselPlugin):
             if selected:
                 con.print(f"\n[bold #38bdf8]⚡ Installing [white]{selected.package_id}[/] via [cyan]{selected.manager}[/]...[/]\n")
                 install_args = [f"--{selected.manager}", selected.package_id]
-                ret = _run_mpm_command("install", install_args, con)
+                ret = _run_mpm_command("install", install_args, con, custom_paths=custom_paths)
                 if ret == 0:
                     inspect_installed_package(selected.package_id, manager=selected.manager, console=con)
                 return ret
@@ -573,14 +672,233 @@ class InstallPlugin(KapselPlugin):
         has_mpm_flag = any(arg in ("-mpm", "--mpm") for arg in args)
 
         if has_mpm_flag:
+            conf = self.load_config()
+            custom_paths = conf.get("custom_paths", {})
             forwarded_args = [arg for arg in args if arg not in ("-mpm", "--mpm")]
             injected = self._inject_priority_args(forwarded_args)
-            return _run_mpm_command("sync", injected, con)
+            return _run_mpm_command("sync", injected, con, custom_paths=custom_paths)
 
         con.print("[bold #f59e0b]Notice:[/] General cloud synchronization is reserved for future releases.")
         con.print("To synchronize package manager configurations via MPM, please add the [bold #00f0ff]-mpm[/] flag:")
         con.print("    [bold #00f0ff]kps sync -mpm[/] [dim][options][/]\n")
         return 0
+
+    # --------------------------------------------------------------------------
+    # Package Manager Management Handlers
+    # --------------------------------------------------------------------------
+
+    def _handle_add_manager(self, args: List[str], con: Console) -> int:
+        """
+        Adds or enables a package manager in the active priority list.
+        Supports specifying an explicit executable location.
+        Usage:
+            kps install add <mgr> [path]
+            kps install add <mgr> --path <path>
+            kps install add <path_to_binary>
+        """
+        if not args:
+            con.print("[bold #f43f5e]Error:[/] Missing package manager identifier or path.")
+            con.print("[bold #00f0ff]Usage:[/]")
+            con.print("  kps install add <mgr> <path_to_executable>  (add manager with custom path)")
+            con.print("  kps install add <path_to_executable>       (auto-infer manager ID from file)")
+            con.print("  kps install add <mgr>                      (enable manager detected in system PATH)")
+            con.print("[dim]Examples:[/]")
+            con.print("  kps install add scoop C:\\Users\\user\\scoop\\shims\\scoop.cmd")
+            con.print("  kps install add winget")
+            return 1
+
+        mgr_name: Optional[str] = None
+        custom_path_str: Optional[str] = None
+
+        # Parse flags vs positional
+        i = 0
+        positional: List[str] = []
+        while i < len(args):
+            arg = args[i]
+            if arg in ("--path", "-p") and i + 1 < len(args):
+                custom_path_str = args[i + 1]
+                i += 2
+            elif arg.startswith("--path="):
+                custom_path_str = arg.split("=", 1)[1]
+                i += 1
+            else:
+                positional.append(arg)
+                i += 1
+
+        if not custom_path_str and len(positional) >= 2:
+            mgr_name = positional[0].lower().strip()
+            custom_path_str = positional[1]
+        elif positional:
+            first = positional[0].strip()
+            # If the single positional argument looks like a file path
+            p_obj = Path(first)
+            if ("/" in first or "\\" in first or p_obj.exists() or p_obj.suffix in (".exe", ".cmd", ".bat", ".sh", ".ps1")):
+                custom_path_str = first
+                mgr_name = p_obj.stem.lower()
+            else:
+                mgr_name = first.lower()
+
+        if not mgr_name and not custom_path_str:
+            con.print("[bold #f43f5e]Error:[/] Could not determine package manager name or path.")
+            return 1
+
+        resolved_path: Optional[Path] = None
+
+        if custom_path_str:
+            clean_str = custom_path_str.strip("\"'")
+            expanded = os.path.expandvars(os.path.expanduser(clean_str))
+            target_path = Path(expanded).resolve()
+
+            if not target_path.exists():
+                con.print(f"[bold #f43f5e]Error:[/] Specified path does not exist: [white]{clean_str}[/]")
+                return 1
+
+            if target_path.is_dir():
+                candidate_names = [mgr_name] if mgr_name else []
+                candidate_names.extend([
+                    f"{mgr_name}.exe", f"{mgr_name}.cmd", f"{mgr_name}.bat", f"{mgr_name}.ps1",
+                ])
+                found = next((target_path / c for c in candidate_names if (target_path / c).is_file()), None)
+                if found:
+                    resolved_path = found
+                else:
+                    con.print(f"[bold #f43f5e]Error:[/] Provided path is a directory and no '{mgr_name}' executable was found inside: [white]{target_path}[/]")
+                    return 1
+            else:
+                resolved_path = target_path
+
+            if not mgr_name:
+                mgr_name = resolved_path.stem.lower()
+
+        # If no custom path was provided, check if the manager is found in system PATH
+        if not resolved_path:
+            bins = MANAGER_BINARIES.get(mgr_name, (mgr_name,))
+            found_bin = next((shutil.which(b) for b in bins if shutil.which(b)), None)
+            if not found_bin:
+                con.print(f"[bold #f43f5e]Error:[/] Package manager '[cyan]{mgr_name}[/]' is not found in system PATH.")
+                con.print("[dim]Please specify the location of the package manager executable:[/]")
+                con.print(f"    [bold #00f0ff]kps install add {mgr_name} <path_to_executable>[/]\n")
+                return 1
+            else:
+                resolved_path = Path(found_bin)
+
+        # Update configuration
+        conf = self.load_config()
+        managers = conf.setdefault("managers", [])
+        disabled = conf.setdefault("disabled", [])
+        custom_paths = conf.setdefault("custom_paths", {})
+
+        if custom_path_str or resolved_path:
+            custom_paths[mgr_name] = str(resolved_path)
+
+        # Register in runtime registries
+        MANAGER_BINARIES[mgr_name] = (resolved_path.name, mgr_name)
+        MPM_SUPPORTED_SELECTORS.add(mgr_name)
+
+        if mgr_name in disabled:
+            disabled.remove(mgr_name)
+
+        if mgr_name not in managers:
+            managers.append(mgr_name)
+
+        self.save_config(conf)
+
+        con.print(f"[bold #10b981]✔ Successfully added package manager '[cyan]{mgr_name}[/]'![/]")
+        con.print(f"  [dim]Executable path:[/] [white]{resolved_path}[/]")
+        return self._show_order(con)
+
+    def _handle_remove_manager(self, args: List[str], con: Console) -> int:
+        """Removes or disables a package manager."""
+        if not args:
+            con.print("[bold #f43f5e]Error:[/] Please specify the manager ID to remove/disable.")
+            con.print("[dim]Usage: kps install rm <manager>[/]")
+            con.print("[dim]Example: kps install rm pip[/]")
+            return 1
+
+        mgr = args[0].lower().strip()
+        conf = self.load_config()
+        managers = conf.get("managers", [])
+        disabled = conf.setdefault("disabled", [])
+
+        if mgr not in managers and mgr not in disabled:
+            con.print(f"[bold #f43f5e]Error:[/] Package manager '[cyan]{mgr}[/]' is not configured.")
+            return 1
+
+        if mgr in managers:
+            managers.remove(mgr)
+        if mgr not in disabled:
+            disabled.append(mgr)
+
+        self.save_config(conf)
+        con.print(f"[bold #10b981]✔ Successfully disabled package manager '[cyan]{mgr}[/]'.[/]")
+        con.print("[dim]It will no longer be used for install, update, or search operations.[/]")
+        return self._show_order(con)
+
+    def _handle_order_manager(self, args: List[str], con: Console) -> int:
+        """Displays or sets explicit package manager priority order."""
+        if not args:
+            return self._show_order(con)
+
+        new_order = [a.lower().strip() for a in args if not a.startswith("-")]
+        if not new_order:
+            return self._show_order(con)
+
+        conf = self.load_config()
+        current_managers = conf.get("managers", [])
+        disabled = set(conf.get("disabled", []))
+
+        final_managers: List[str] = []
+        for m in new_order:
+            if m in disabled:
+                disabled.remove(m)
+            if m not in final_managers:
+                final_managers.append(m)
+
+        for m in current_managers:
+            if m not in final_managers and m not in disabled:
+                final_managers.append(m)
+
+        conf["managers"] = final_managers
+        conf["disabled"] = list(disabled)
+        self.save_config(conf)
+        con.print("[bold #10b981]✔ Package manager priority order updated successfully![/]")
+        return self._show_order(con)
+
+    def _handle_move_manager(self, args: List[str], direction: int, con: Console) -> int:
+        """Moves a package manager up or down in priority order."""
+        action_name = "up" if direction < 0 else "down"
+        if not args:
+            con.print(f"[bold #f43f5e]Error:[/] Please specify the manager ID to move {action_name}.")
+            con.print(f"[dim]Usage: kps install {action_name} <manager>[/]")
+            return 1
+
+        mgr = args[0].lower().strip()
+        conf = self.load_config()
+        managers = conf.get("managers", [])
+
+        if mgr not in managers:
+            if mgr in conf.get("disabled", []):
+                con.print(f"[bold #f59e0b]Notice:[/] Manager '[cyan]{mgr}[/]' is currently disabled.")
+                con.print(f"Enable it first via: [bold #00f0ff]kps install add {mgr}[/]")
+            else:
+                con.print(f"[bold #f43f5e]Error:[/] Manager '[cyan]{mgr}[/]' is not in the active manager list.")
+            return 1
+
+        idx = managers.index(mgr)
+        new_idx = idx + direction
+
+        if new_idx < 0:
+            con.print(f"[bold #f59e0b]Notice:[/] '[cyan]{mgr}[/]' is already at the highest priority.")
+            return 0
+        if new_idx >= len(managers):
+            con.print(f"[bold #f59e0b]Notice:[/] '[cyan]{mgr}[/]' is already at the lowest priority.")
+            return 0
+
+        managers[idx], managers[new_idx] = managers[new_idx], managers[idx]
+        conf["managers"] = managers
+        self.save_config(conf)
+        con.print(f"[bold #10b981]✔ Moved '[cyan]{mgr}[/]' {action_name} in priority.[/]")
+        return self._show_order(con)
 
     # --------------------------------------------------------------------------
     # Interactive Inspection & Management UI
@@ -591,7 +909,8 @@ class InstallPlugin(KapselPlugin):
         conf = self.load_config()
         plat = conf.get("platform", _get_current_platform_key())
         managers = conf.get("managers", [])
-        disabled = set(conf.get("disabled", []))
+        disabled = conf.get("disabled", [])
+        custom_paths = conf.get("custom_paths", {})
         cfg_path = self.get_config_path()
 
         table = Table(
@@ -603,34 +922,56 @@ class InstallPlugin(KapselPlugin):
         table.add_column("Priority", justify="center", style="bold #a855f7", width=10)
         table.add_column("Manager ID", style="bold white", width=16)
         table.add_column("Status", justify="center", width=12)
-        table.add_column("Executable Detected", style="dim", width=22)
+        table.add_column("Executable Path / Status", style="dim", width=36)
 
         priority_idx = 1
         for m in managers:
-            bins = MANAGER_BINARIES.get(m, (m,))
-            found_bin = next((shutil.which(b) for b in bins if shutil.which(b)), None)
+            status_str = "[bold #10b981]Active[/]"
+            p_str = f"#{priority_idx}"
+            priority_idx += 1
 
-            if m in disabled:
-                status_str = "[dim #6b7280]Disabled[/]"
-                p_str = "[dim]-[/]"
+            if m in custom_paths:
+                cp = Path(custom_paths[m])
+                if cp.exists():
+                    bin_str = f"[#10b981]✔ (custom)[/] {cp.name} [dim]({cp.parent})[/]"
+                else:
+                    bin_str = f"[#f43f5e]✘ missing:[/] [dim]{cp}[/]"
             else:
-                status_str = "[bold #10b981]Active[/]"
-                p_str = f"#{priority_idx}"
-                priority_idx += 1
+                bins = MANAGER_BINARIES.get(m, (m,))
+                found_bin = next((shutil.which(b) for b in bins if shutil.which(b)), None)
+                bin_str = f"[#10b981]✔[/] {Path(found_bin).name}" if found_bin else "[dim #f43f5e]✘ not in PATH[/]"
 
-            bin_str = f"[#10b981]✔[/] {Path(found_bin).name}" if found_bin else "[dim #f43f5e]✘ not in PATH[/]"
+            table.add_row(p_str, m, status_str, bin_str)
+
+        for m in disabled:
+            status_str = "[dim #6b7280]Disabled[/]"
+            p_str = "[dim]-[/]"
+            if m in custom_paths:
+                cp = Path(custom_paths[m])
+                bin_str = f"[dim](custom) {cp.name}[/]"
+            else:
+                bins = MANAGER_BINARIES.get(m, (m,))
+                found_bin = next((shutil.which(b) for b in bins if shutil.which(b)), None)
+                bin_str = f"[dim]{Path(found_bin).name}[/]" if found_bin else "[dim]not in PATH[/]"
             table.add_row(p_str, m, status_str, bin_str)
 
         con.print()
         con.print(table)
         con.print(f"[dim]Platform:[/] [bold white]{plat}[/]  |  [dim]Config file:[/] [cyan]{cfg_path}[/]")
-        con.print("[dim]Tip: Edit the config file or run 'kps install --detect' to refresh.[/]\n")
+        con.print("[dim]Commands: 'kps install add <mgr> [path]', 'rm <mgr>', 'order [m1 m2...]', 'up <mgr>', 'down <mgr>'[/]\n")
         return 0
 
     def _rescan_managers(self, con: Console) -> int:
         """Rescans the system, updates the configuration, and displays the result."""
         con.print("[bold #00f0ff]🔍 Rescanning system package managers...[/]")
+        old_conf = self.load_config()
+        old_custom = old_conf.get("custom_paths", {})
         new_conf = self.generate_default_config()
+        # Preserve user custom paths across rescans
+        new_conf["custom_paths"] = old_custom
+        for mid in old_custom:
+            if mid not in new_conf["managers"]:
+                new_conf["managers"].append(mid)
         self.save_config(new_conf)
         con.print("[bold #10b981]✔ Package manager configuration updated successfully![/]")
         return self._show_order(con)
@@ -642,15 +983,19 @@ class InstallPlugin(KapselPlugin):
                 "[bold white]Kapsel Unified Cross-Platform Installer[/]\n"
                 "[dim]Powered by meta-package-manager (mpm) with intelligent priority scheduling.[/]\n\n"
                 "[bold #00f0ff]Usage:[/]\n"
-                "  kps install <package_name> [options]\n\n"
-                "[bold #00f0ff]Priority & Configuration Commands:[/]\n"
-                "  kps install --order       Show current package manager priority order\n"
-                "  kps install --detect      Rescan installed package managers & update order\n"
-                "  kps install --config      Display path to configuration file\n\n"
-                "[bold #00f0ff]Direct MPM Passthrough Examples:[/]\n"
-                "  kps install curl                   (installs with highest priority manager)\n"
-                "  kps install --scoop neovim         (forces installation via Scoop)\n"
-                "  kps install --dry-run ripgrep      (simulates install without making changes)",
+                "  kps install <package_name...> [options]\n\n"
+                "[bold #00f0ff]Package Manager Management Commands:[/]\n"
+                "  kps install add <mgr> [path]   Add manager to active list (optionally pass executable path)\n"
+                "  kps install rm <mgr>           Disable/remove manager from active priority\n"
+                "  kps install order [m1 m2...]   View or set explicit priority order\n"
+                "  kps install up <mgr>           Increase manager priority\n"
+                "  kps install down <mgr>         Decrease manager priority\n"
+                "  kps install --detect           Rescan system package managers\n"
+                "  kps install --config           Show configuration file path\n\n"
+                "[bold #00f0ff]Installation Examples:[/]\n"
+                "  kps install curl git           (batch installs multiple packages concurrently)\n"
+                "  kps install --scoop neovim     (forces installation via Scoop)\n"
+                "  kps install --dry-run ripgrep  (simulates install without making changes)",
                 title="[bold #a855f7]kps install[/]",
                 border_style="#00f0ff",
             )

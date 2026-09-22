@@ -36,10 +36,6 @@ try:
 except ImportError:
     from plugins.preview.fm import run_file_manager
 
-try:
-    from .viewer import run_preview_viewer
-except ImportError:
-    from plugins.preview.viewer import run_preview_viewer
 
 try:
     from kapsel.ui.banner import ensure_utf8_io
@@ -104,8 +100,8 @@ class PreviewPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="preview",
         name="Preview",
-        version="0.2.1",
-        description="Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm) and paginated TUI viewer container.",
+        version="0.2.6",
+        description="Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm).",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/preview",
         min_kapsel_version="0.1.0",
@@ -339,12 +335,7 @@ class PreviewPlugin(KapselPlugin):
                 con.print(f"[bold #10b981]⚡ Selected directory:[/] [white]{target_cd}[/]")
             return 0
 
-        # 2. PDF -> opens the interactive paginated TUI viewer.
-        # Other formats retain their native terminal CLI renderer.
-        if target_path.suffix.lower() == ".pdf" and not force_cli and sys.stdout.isatty():
-            return run_preview_viewer(target_path, initial_page=page_num)
-
-        # 3. Standard non-interactive stdout fallback for shell pipes
+        # 2. Files -> dispatch directly to dedicated native CLI tools
         return self.dispatch_preview(target_path, con, lines_limit=lines_limit, page_num=page_num)
 
     def dispatch_preview(

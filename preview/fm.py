@@ -24,6 +24,7 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 from prompt_toolkit.application import Application
+from prompt_toolkit.formatted_text import ANSI, to_formatted_text
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
@@ -115,6 +116,99 @@ def open_file_externally(path: Path) -> None:
             subprocess.run(["xdg-open", str(path)])
     except Exception:
         pass
+
+
+ARCHIVE_EXTENSIONS = (
+    ".zip", ".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz",
+    ".7z", ".rar", ".whl", ".jar", ".iso", ".apk", ".zst",
+)
+
+IMAGE_EXTENSIONS = (
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".ico", ".bmp", ".tiff", ".svg", ".avif", ".heic", ".jxl",
+)
+
+
+def _get_archive_entries(archive_path: Path) -> Optional[List[Tuple[str, int, bool]]]:
+    """
+    Extracts member entries (name, size, is_dir) from zip, 7z, tar, and other archives
+    using 7z/tar tools or Python's standard zipfile/tarfile modules.
+    """
+    suffix = archive_path.suffix.lower()
+
+    # 1. Native zipfile for standard zip, whl, jar, apk
+    if suffix in (".zip", ".whl", ".jar", ".apk"):
+        try:
+            import zipfile
+            if zipfile.is_zipfile(archive_path):
+                with zipfile.ZipFile(archive_path, "r") as zf:
+                    results = []
+                    for info in zf.infolist():
+                        if info.filename.startswith("__MACOSX"):
+                            continue
+                        results.append((info.filename, info.file_size, info.is_dir()))
+                    return results
+        except Exception:
+            pass
+
+    # 2. Dedicated CLI archive tool (7zz / 7z)
+    tool_7z = shutil.which("7zz") or shutil.which("7z")
+    if not tool_7z:
+        for candidate in [
+            Path(os.environ.get("WINDIR", "C:\\WINDOWS")) / "system32" / "7z.exe",
+            Path(os.environ.get("USERPROFILE", Path.home())) / "scoop" / "shims" / "7z.exe",
+            Path(os.environ.get("USERPROFILE", Path.home())) / ".kapsel" / "bin" / "7z.exe",
+        ]:
+            if candidate.exists():
+                tool_7z = str(candidate)
+                break
+
+    if tool_7z:
+        try:
+            p = subprocess.run(
+                [tool_7z, "l", "-sccUTF-8", "-xr!__MACOSX", str(archive_path)],
+                capture_output=True,
+                timeout=6,
+            )
+            if p.returncode == 0:
+                out = p.stdout.decode("utf-8", errors="replace")
+                lines = out.splitlines()
+                in_table = False
+                results = []
+                for line in lines:
+                    if line.startswith("-------------------"):
+                        in_table = not in_table
+                        continue
+                    if in_table and len(line) >= 53:
+                        attr = line[20:25]
+                        is_dir = "D" in attr
+                        try:
+                            size = int(line[26:38].strip())
+                        except ValueError:
+                            size = 0
+                        name = line[53:].strip()
+                        if name:
+                            results.append((name, size, is_dir))
+                if results:
+                    return results
+        except Exception:
+            pass
+
+    # 3. Native tarfile for tar, tar.gz, tgz, etc.
+    if suffix in (".tar", ".gz", ".tgz", ".bz2", ".tbz2", ".xz", ".txz"):
+        try:
+            import tarfile
+            if tarfile.is_tarfile(archive_path):
+                with tarfile.open(archive_path, "r:*") as tf:
+                    results = []
+                    for member in tf.getmembers():
+                        if member.name.startswith("__MACOSX"):
+                            continue
+                        results.append((member.name, member.size, member.isdir()))
+                    return results
+        except Exception:
+            pass
+
+    return None
 
 
 class FileManagerApp:
@@ -408,9 +502,73 @@ class FileManagerApp:
         else:
             try:
                 size_bytes = selected.stat().st_size
-                res.append(("class:fm.preview_header", f" 📄 {selected.name} ({format_size(size_bytes)})\n"))
+                suffix = selected.suffix.lower()
+                is_archive = suffix in ARCHIVE_EXTENSIONS
+                is_image = suffix in IMAGE_EXTENSIONS
 
-                # Check for binary file
+                if is_archive:
+                    header_icon = "📦"
+                elif is_image:
+                    header_icon = "🖼️"
+                else:
+                    header_icon = "📄"
+
+                res.append(("class:fm.preview_header", f" {header_icon} {selected.name} ({format_size(size_bytes)})\n"))
+
+                # 2a. Image Preview via Chafa
+                if is_image:
+                    tool_chafa = shutil.which("chafa")
+                    if not tool_chafa:
+                        for candidate in [
+                            Path(os.environ.get("USERPROFILE", Path.home())) / "scoop" / "shims" / "chafa.exe",
+                            Path(os.environ.get("USERPROFILE", Path.home())) / ".kapsel" / "bin" / "chafa.exe",
+                            Path(os.environ.get("WINDIR", "C:\\WINDOWS")) / "system32" / "chafa.exe",
+                        ]:
+                            if candidate.exists():
+                                tool_chafa = str(candidate)
+                                break
+
+                    if tool_chafa:
+                        preview_width = max(16, shutil.get_terminal_size((80, 24)).columns - 64)
+                        preview_height = max(8, term_height - 2)
+                        try:
+                            cp = subprocess.run(
+                                [tool_chafa, f"--size={preview_width}x{preview_height}", "--colors=full", str(selected)],
+                                capture_output=True,
+                                timeout=5,
+                            )
+                            if cp.returncode == 0 and cp.stdout:
+                                ansi_out = cp.stdout.decode("utf-8", errors="replace")
+                                img_tokens = list(to_formatted_text(ANSI(ansi_out)))
+                                res.extend(img_tokens)
+                                self.preview_cache[cache_key] = res
+                                return res
+                        except Exception:
+                            pass
+
+                    res.append(("class:fm.size", "\n [Image preview requires chafa]\n"))
+                    res.append(("class:fm.preview_lineno", " Install via: kapsel install preview\n"))
+                    self.preview_cache[cache_key] = res
+                    return res
+
+                # 2b. Archive Preview (zip, 7z, tar, etc.)
+                if is_archive:
+                    entries = _get_archive_entries(selected)
+                    if entries is not None:
+                        total_unpacked = sum(e[1] for e in entries if not e[2])
+                        res.append(("class:fm.preview_dir_head", f" Contains: {len(entries)} items ({format_size(total_unpacked)} unpacked)\n\n"))
+                        for entry_name, entry_size, is_dir in entries[: term_height - 4]:
+                            icon = "📁" if is_dir else get_file_icon(Path(entry_name))
+                            size_str = format_size(entry_size) if not is_dir else "dir"
+                            display_name = entry_name[:36]
+                            res.append(("class:fm.preview_dir_item", f"   {icon} {display_name}"))
+                            res.append(("class:fm.size", f"  ({size_str})\n"))
+                        if len(entries) > term_height - 4:
+                            res.append(("class:fm.size", f"   ... and {len(entries) - (term_height - 4)} more items\n"))
+                        self.preview_cache[cache_key] = res
+                        return res
+
+                # 2b. Standard File (Text or Binary)
                 with open(selected, "rb") as f:
                     chunk = f.read(1024)
                     is_binary = b"\x00" in chunk

@@ -29,21 +29,54 @@ ensure_utf8_io()
 
 
 def _inject_args(template: str, args: str) -> str:
-    """Safely injects command arguments into a template placeholder or appends them."""
+    """Safely injects command arguments into a template placeholder or appends them without corrupting quoted whitespace."""
+    tpl = template.strip()
     args_clean = args.strip()
-    if "{{args}}" in template:
+    if "{{args}}" in tpl:
         if args_clean:
-            res = template.replace("{{args}}", args_clean)
+            return tpl.replace("{{args}}", args_clean).strip()
         else:
-            res = template.replace("{{args}}", "").strip()
+            return re.sub(r"\s+", " ", tpl.replace("{{args}}", "")).strip()
     else:
         if args_clean:
-            res = f"{template} {args_clean}"
+            return f"{tpl} {args_clean}"
         else:
-            res = template
+            return tpl
 
-    # Normalize multiple whitespace
-    return re.sub(r"\s+", " ", res).strip()
+
+def _split_pipeline(command: str) -> List[str]:
+    """Splits a command line by pipe characters '|' while ignoring pipes inside quotes."""
+    segments: List[str] = []
+    current: List[str] = []
+    in_single_quote = False
+    in_double_quote = False
+    escape = False
+
+    for ch in command:
+        if escape:
+            current.append(ch)
+            escape = False
+            continue
+
+        if ch == "\\":
+            current.append(ch)
+            escape = True
+            continue
+
+        if ch == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+            current.append(ch)
+        elif ch == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+            current.append(ch)
+        elif ch == "|" and not in_single_quote and not in_double_quote:
+            segments.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+
+    segments.append("".join(current))
+    return segments
 
 
 class AliasPlugin(KapselPlugin):
@@ -55,7 +88,7 @@ class AliasPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="alias",
         name="Alias",
-        version="0.2.2",
+        version="0.2.5",
         description="Multi-terminal command mapping translating universal aliases to host shell commands.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/alias",
@@ -165,23 +198,17 @@ class AliasPlugin(KapselPlugin):
 
         return None
 
-    def filter_command(self, raw_command: str) -> Tuple[bool, str]:
-        """
-        Translates universal Linux-first aliases entered in the Kapsel interactive shell
-        into native host shell commands (or modern CLI tools).
-        Note:
-        - 'kps ...' and 'kapsel ...' commands are strictly preserved and never intercepted.
-        - Direct interactive typing (e.g. 'rm -rf dir', 'cat file', 'll') is transparently translated.
-        """
-        stripped = raw_command.strip()
+    def _translate_single_command(self, raw_part: str) -> Tuple[bool, str]:
+        """Translates a single command segment (without outer pipes)."""
+        stripped = raw_part.strip()
         if not stripped:
-            return False, raw_command
+            return False, raw_part
 
-        # The 'kps' and 'kapsel' namespaces are strictly preserved for tools and system management
+        # The 'kps' and 'kapsel' namespaces are strictly preserved
         if stripped == "kps" or stripped.startswith("kps "):
-            return False, raw_command
+            return False, raw_part
         if stripped == "kapsel" or stripped.startswith("kapsel "):
-            return False, raw_command
+            return False, raw_part
 
         # Sort mappings by descending alias length for longest-prefix match (e.g. 'rm -rf' before 'rm')
         sorted_mappings = sorted(self.mappings, key=lambda m: len(m.get("alias", "")), reverse=True)
@@ -201,29 +228,108 @@ class AliasPlugin(KapselPlugin):
                 if template:
                     return True, _inject_args(template, raw_args)
 
-        return False, raw_command
+        return False, raw_part
+
+    def filter_command(self, raw_command: str) -> Tuple[bool, str]:
+        """
+        Translates universal Linux-first aliases entered in the Kapsel interactive shell
+        into native host shell commands (or modern CLI tools).
+        Supports pipeline segmentation (splitting by '|').
+        Note:
+        - 'kps ...' and 'kapsel ...' commands are strictly preserved and never intercepted.
+        - Direct interactive typing (e.g. 'rm -rf dir', 'cat file', 'll') is transparently translated.
+        """
+        try:
+            stripped = raw_command.strip()
+            if not stripped:
+                return False, raw_command
+
+            # The 'kps' and 'kapsel' namespaces are strictly preserved for tools and system management
+            if stripped == "kps" or stripped.startswith("kps "):
+                return False, raw_command
+            if stripped == "kapsel" or stripped.startswith("kapsel "):
+                return False, raw_command
+
+            segments = _split_pipeline(stripped)
+            if len(segments) <= 1:
+                handled, translated = self._translate_single_command(stripped)
+                if not handled:
+                    return False, raw_command
+
+                # "就相当于直接输入":
+                # If the translated command is an internal Kapsel command (kps ..., kapsel ..., kp ...),
+                # dispatch it in-process directly.
+                trans_stripped = translated.strip()
+                if (
+                    trans_stripped in ("kps", "kapsel", "kp")
+                    or trans_stripped.startswith("kps ")
+                    or trans_stripped.startswith("kapsel ")
+                    or trans_stripped.startswith("kp ")
+                ):
+                    try:
+                        from kapsel.completion.kps.dispatcher import dispatch_kps
+                        con = Console(legacy_windows=False)
+                        dispatch_kps(trans_stripped, con)
+                        return True, ""
+                    except Exception:
+                        pass
+
+                return True, translated
+
+            translated_segments: List[str] = []
+            any_handled = False
+
+            for seg in segments:
+                handled, trans = self._translate_single_command(seg)
+                if handled:
+                    any_handled = True
+                    translated_segments.append(trans)
+                else:
+                    translated_segments.append(seg.strip())
+
+            if any_handled:
+                return True, " | ".join(translated_segments)
+            return False, raw_command
+        except Exception:
+            return False, raw_command
 
     def handle_alias(self, args: List[str], console: Optional[Console] = None) -> int:
-        """Handles 'kps alias' management subcommands."""
+        """Handles 'kps alias' management subcommands or interactive creation."""
         con = console or Console(legacy_windows=False)
 
-        if not args or args[0].lower() in ("list", "ls"):
-            target_platform = None
-            if len(args) > 1 and args[1] not in ("-h", "--help"):
-                target_platform = args[1]
-            return self._show_list(con, platform_filter=target_platform)
+        # 1. Detect bracket syntax in arguments, e.g. kps alias [help] [kps help]
+        raw_args_line = " ".join(args).strip()
+        bracket_matches = re.findall(r"\[(.*?)\]", raw_args_line)
+        if len(bracket_matches) >= 2:
+            return self._handle_bracket_add(bracket_matches, con)
+
+        # 2. Interactive Mode: user simply typed 'kps alias' with NO arguments
+        if not args:
+            return self._handle_interactive_add(con)
 
         subcmd = args[0].lower()
         sub_args = args[1:]
+
+        # Explicit list: 'kps alias list' or 'kps alias ls'
+        if subcmd in ("list", "ls"):
+            target_platform = None
+            if sub_args and sub_args[0] not in ("-h", "--help"):
+                target_platform = sub_args[0]
+            return self._show_list(con, platform_filter=target_platform)
+
+        # Explicit add: 'kps alias add ...'
+        if subcmd == "add":
+            raw_sub = " ".join(sub_args).strip()
+            brackets = re.findall(r"\[(.*?)\]", raw_sub)
+            if len(brackets) >= 2:
+                return self._handle_bracket_add(brackets, con)
+            return self._handle_add(sub_args, con)
 
         if subcmd == "ultra":
             return self._handle_ultra(sub_args, con)
 
         if subcmd == "test":
             return self._handle_test(sub_args, con)
-
-        if subcmd == "add":
-            return self._handle_add(sub_args, con)
 
         if subcmd in ("remove", "rm", "delete"):
             return self._handle_remove(sub_args, con)
@@ -234,8 +340,188 @@ class AliasPlugin(KapselPlugin):
         if subcmd in ("-h", "--help", "help"):
             return self._show_help(con)
 
+        # Direct syntax without 'add' keyword: kps alias <alias> <template>
+        if len(args) >= 2:
+            return self._handle_add(args, con)
+
         con.print(f"[bold #f43f5e]Unknown subcommand '{subcmd}'.[/] Use 'kps alias --help' for usage.\n")
         return 1
+
+    def _handle_bracket_add(self, brackets: List[str], con: Console) -> int:
+        """
+        Handles 1:1 verbatim mapping specified via brackets:
+        kps alias [alias] [target] [optional_platform]
+        Pure verbatim mapping without alteration.
+        """
+        alias_name = brackets[0].strip()
+        target_template = brackets[1]  # Verbatim 1:1 mapping preserving exact user content
+        platform_spec = brackets[2].strip().lower() if len(brackets) > 2 else self.current_shell
+
+        if not alias_name or not target_template:
+            con.print("[bold #f43f5e]Error:[/] Both alias and target command must not be empty.\n")
+            return 1
+
+        platforms = [p.strip() for p in platform_spec.split(",") if p.strip()]
+        if "universal" in platforms or "all" in platforms:
+            expanded_platforms = ["universal", "pwsh", "cmd", "unix", "powershell"]
+        else:
+            expanded_platforms = platforms
+
+        updated = False
+        for m in self.mappings:
+            if m.get("alias") == alias_name:
+                for p in expanded_platforms:
+                    m.setdefault("templates", {})[p] = target_template
+                updated = True
+                break
+
+        if not updated:
+            new_entry = {
+                "alias": alias_name,
+                "desc": f"Alias for {alias_name}",
+                "templates": {p: target_template for p in expanded_platforms},
+            }
+            self.mappings.append(new_entry)
+
+        self._save_mappings()
+        con.print(f"[bold #10b981]✔ Mapped:[/] [bold #00f0ff]{alias_name}[/] [dim]->[/] [bold #a855f7]{target_template}[/]\n")
+        return 0
+
+    def _handle_interactive_add(self, con: Console) -> int:
+        """
+        Interactive 2-step alias mapping:
+        1. Prompt for trigger command/word (with alias & CLI tool autocompletion)
+        2. Prompt for target command to map to (with full Carapace command autocompletion)
+        Verbatim 1:1 mapping without modification.
+        """
+        con.print("\n[bold #00f0ff]⚡ Kapsel Alias · Command Mapping[/]")
+        con.print("[dim]Define custom command mapping (Press Esc or Ctrl+C to cancel)[/]\n")
+
+        try:
+            from prompt_toolkit import prompt
+            from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
+            from prompt_toolkit.formatted_text import HTML
+            from kapsel.completion.carapace_engine import CarapaceEngine
+            from kapsel.completion.completer import DualStateCompleter
+            from kapsel.ui.theme import PT_STYLE
+
+            class _AliasTriggerCompleter(Completer):
+                """Autocompletes alias triggers using registered mappings and system CLI commands."""
+                def __init__(self, mappings: List[Dict[str, Any]], shell: str):
+                    self.mappings = mappings
+                    self.shell = shell
+                    self._engine = None
+
+                def get_completions(self, document, complete_event):
+                    word = document.get_word_before_cursor()
+                    seen = set()
+                    prefix_matches = []
+                    substr_matches = []
+
+                    for m in self.mappings:
+                        alias = str(m.get("alias", "")).strip()
+                        if not alias or alias in seen:
+                            continue
+                        seen.add(alias)
+
+                        templates = m.get("templates", {})
+                        target_prev = templates.get(self.shell) or templates.get("universal") or (next(iter(templates.values())) if templates else "")
+                        desc = m.get("desc", "")
+                        meta = f"-> {target_prev}" if target_prev else desc
+
+                        if not word:
+                            prefix_matches.append((alias, meta))
+                        elif alias.lower().startswith(word.lower()):
+                            prefix_matches.append((alias, meta))
+                        elif word.lower() in alias.lower():
+                            substr_matches.append((alias, meta))
+
+                    for a, m_desc in prefix_matches + substr_matches:
+                        yield Completion(
+                            text=a,
+                            start_position=-len(word),
+                            display=a,
+                            display_meta=m_desc[:45] if m_desc else "",
+                        )
+
+                    if word and len(word) >= 1:
+                        try:
+                            if self._engine is None:
+                                self._engine = CarapaceEngine()
+                            tools = self._engine.get_supported_tools()
+                            count = 0
+                            for t in sorted(tools):
+                                if t not in seen and t.startswith(word.lower()):
+                                    yield Completion(
+                                        text=t,
+                                        start_position=-len(word),
+                                        display=t,
+                                        display_meta="System CLI tool",
+                                    )
+                                    count += 1
+                                    if count >= 10:
+                                        break
+                        except Exception:
+                            pass
+
+            # Step 1: Input trigger alias
+            prompt_1 = HTML("<ansicyan><b>╭─ [1/2] Alias Trigger</b> ❯ </ansicyan>")
+            alias_completer = _AliasTriggerCompleter(self.mappings, self.current_shell)
+            alias_name = prompt(
+                prompt_1,
+                completer=alias_completer,
+                complete_while_typing=True,
+                style=PT_STYLE,
+            ).strip()
+            if not alias_name:
+                con.print("[yellow]Cancelled (empty alias name).[/]\n")
+                return 0
+
+            # Step 2: Input target command
+            existing_target = ""
+            for m in self.mappings:
+                if m.get("alias") == alias_name:
+                    templates = m.get("templates", {})
+                    existing_target = templates.get(self.current_shell) or templates.get("universal") or (next(iter(templates.values())) if templates else "")
+                    break
+
+            target_completer = ThreadedCompleter(
+                DualStateCompleter(
+                    current_shell=self.current_shell,
+                    plugin_manager=getattr(self.context, "plugin_manager", None) if self.context else None,
+                )
+            )
+
+            prompt_2 = HTML("<ansicyan><b>╰─ [2/2] Target Command</b> ❯ </ansicyan>")
+            target_cmd = prompt(
+                prompt_2,
+                default=existing_target,
+                completer=target_completer,
+                complete_while_typing=True,
+                style=PT_STYLE,
+            )
+            if not target_cmd.strip():
+                con.print("[yellow]Cancelled (empty target command).[/]\n")
+                return 0
+
+            return self._handle_bracket_add([alias_name, target_cmd], con)
+
+        except (KeyboardInterrupt, EOFError):
+            con.print("\n[yellow]Cancelled.[/]\n")
+            return 0
+        except Exception:
+            try:
+                con.print("[bold #00f0ff]╭─ [1/2] Alias Trigger:[/] ", end="")
+                alias_name = input().strip()
+                if not alias_name:
+                    return 0
+                con.print("[bold #00f0ff]╰─ [2/2] Target Command:[/] ", end="")
+                target_cmd = input()
+                if not target_cmd.strip():
+                    return 0
+                return self._handle_bracket_add([alias_name, target_cmd], con)
+            except Exception:
+                return 0
 
     # --------------------------------------------------------------------------
     # Subcommand Handlers

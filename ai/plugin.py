@@ -77,8 +77,8 @@ class AiPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="ai",
         name="Ai",
-        version="0.1.7",
-        description="Native terminal AI assistant powered by OpenAI Python SDK.",
+        version="0.1.8",
+        description="Native terminal AI assistant powered by OpenAI Python SDK with Carapace spec generation and sanitization.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/ai",
         min_kapsel_version="0.1.0",

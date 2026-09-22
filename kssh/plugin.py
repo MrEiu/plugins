@@ -22,7 +22,7 @@ from kapsel.core.plugin.hooks import HookType
 
 ensure_utf8_io()
 from .config import find_host, load_hosts, remove_host
-from .session import run_ssh_session
+from .session import resolve_local_upload_path, run_ssh_session
 from .transfer import execute_scp_upload
 from .tui import render_host_picker
 from .tunnel import tunnel_manager
@@ -31,6 +31,8 @@ from .tunnel import tunnel_manager
 def _parse_target_str(target: str) -> Tuple[str, str, int]:
     """
     Parses connection target string:
+    - 'wsl'                  -> ('current', 'wsl', 22)
+    - 'wsl:Ubuntu'           -> ('current', 'wsl:Ubuntu', 22)
     - 'root@124.12.15.4:2222' -> ('root', '124.12.15.4', 2222)
     - 'admin@192.168.1.10'    -> ('admin', '192.168.1.10', 22)
     - '10.0.0.8'              -> ('root', '10.0.0.8', 22)
@@ -43,6 +45,12 @@ def _parse_target_str(target: str) -> Tuple[str, str, int]:
         user_part, host = host.split("@", 1)
         if user_part:
             user = user_part
+
+    # Handle WSL target aliases
+    if host.lower() == "wsl" or host.lower().startswith("wsl:"):
+        if user == "root":
+            user = "current"
+        return user, host, port
 
     if ":" in host:
         host_part, port_str = host.rsplit(":", 1)
@@ -64,12 +72,12 @@ class KsshPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="kssh",
         name="Kssh",
-        version="0.1.0",
-        description="Ergonomic SSH companion with portable host history, in-session hotkey operations, and transparent signal passthrough.",
+        version="0.1.4",
+        description="Ergonomic SSH & WSL companion with portable host history, in-session hotkeys, and transparent signal passthrough.",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/kssh",
         min_kapsel_version="0.1.0",
-        tags=["ssh", "remote", "network", "tunnel", "upload"],
+        tags=["ssh", "wsl", "remote", "network", "tunnel", "upload"],
     )
 
     def on_load(self, context: PluginContext) -> None:
@@ -213,7 +221,7 @@ class KsshPlugin(KapselPlugin):
             if len(args) < 2:
                 con.print("[bold #f43f5e]用法:[/] kssh up <本地文件> [远程目录] [-t 目标主机]")
                 return 1
-            local_file = args[1]
+            local_file = resolve_local_upload_path(args[1])
             remote_dir = args[2] if len(args) > 2 and not args[2].startswith("-") else "~"
             h = find_host("1")
             if not h:

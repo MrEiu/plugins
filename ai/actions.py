@@ -485,6 +485,12 @@ def action_spec(tool: str, con: Console, client: AiClient) -> int:
         con.print("[bold #f43f5e]Error:[/] Please specify a tool name. Example: [bold #00f0ff]kps ai spec uv[/]\n")
         return 1
 
+    if normalized in ("--fix", "fix", "--sanitize"):
+        from .spec_generator import sanitize_all_user_specs
+        fixed = sanitize_all_user_specs()
+        con.print(f"\n[bold #10b981]✔ Sanitized and synchronized {fixed} user specification file(s) into Carapace![/]\n")
+        return 0
+
     if not shutil.which(normalized):
         con.print(f"[bold #f43f5e]Error:[/] Tool [bold white]'{normalized}'[/] was not found on PATH. Please verify it is installed.\n")
         return 1

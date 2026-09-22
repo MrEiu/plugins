@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-aria2"
+version = "0.1.0"
+description = "High-speed concurrent download accelerator for Kapsel powered by aria2c (-s 16, -x 16, -j 4)."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+dependencies = []
+keywords = ["kapsel", "plugin", "download", "aria2", "accelerator", "concurrency"]
+
+[project.urls]
+Homepage = "https://github.com/MrEiu/plugins/tree/master/aria2"
+Repository = "https://github.com/MrEiu/plugins.git"

@@ -32,8 +32,60 @@ from .transfer import (
 from .tunnel import tunnel_manager
 
 
+def resolve_local_upload_path(raw_path: str) -> str:
+    """
+    Normalizes local path and converts Windows drive paths (e.g. C:\\...)
+    to WSL paths (/mnt/c/...) when running in WSL/Linux.
+    """
+    clean = os.path.expanduser(raw_path.strip().strip("'\""))
+    if not clean:
+        return clean
+
+    if sys.platform != "win32" and len(clean) >= 2 and clean[1] == ":":
+        drive = clean[0].lower()
+        rest = clean[2:].replace("\\", "/")
+        return f"/mnt/{drive}{rest}"
+    return clean
+
+
+def ensure_secure_key_path(key_path: Optional[str]) -> Optional[str]:
+    """
+    Ensures private key file has secure permissions (0600) on POSIX/WSL.
+    On WSL DrvFs mounts (/mnt/c/...), permissions often default to 0777 and
+    chmod fails to restrict them. OpenSSH rejects private keys with 0777.
+    This helper auto-copies the key to ~/.kapsel/secure_keys/ with mode 0600.
+    """
+    if not key_path or not os.path.isfile(key_path):
+        return key_path
+
+    if sys.platform == "win32":
+        return key_path
+
+    try:
+        st = os.stat(key_path)
+        if (st.st_mode & 0o077) != 0:
+            try:
+                os.chmod(key_path, 0o600)
+                st = os.stat(key_path)
+                if (st.st_mode & 0o077) == 0:
+                    return key_path
+            except Exception:
+                pass
+
+            kapsel_keys = Path.home() / ".kapsel" / "secure_keys"
+            kapsel_keys.mkdir(parents=True, exist_ok=True)
+            dest_key = kapsel_keys / Path(key_path).name
+            shutil.copy2(key_path, dest_key)
+            os.chmod(dest_key, 0o600)
+            return str(dest_key)
+    except Exception:
+        pass
+
+    return key_path
+
+
 def _read_char_direct() -> bytes:
-    """Reads a raw byte from console input on Windows or Unix."""
+    """Reads a raw byte from console input on Windows or Unix/WSL."""
     if sys.platform == "win32":
         import msvcrt
         return msvcrt.getch()
@@ -44,8 +96,7 @@ def _read_char_direct() -> bytes:
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
-            ch = sys.stdin.read(1)
-            return ch.encode("utf-8", errors="ignore")
+            return os.read(fd, 1)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
@@ -67,7 +118,9 @@ def handle_in_session_menu(
     con = console or Console(legacy_windows=False)
 
     # Move to new line and print menu
-    sys.stdout.write("\r\n\x1b[7;36m [kssh] \x1b[0m \x1b[1;37mu: 上传文件到当前目录  p: 端口转发  (Esc 取消) > \x1b[0m")
+    sys.stdout.write(
+        "\r\n\x1b[7;36m [kssh] \x1b[0m \x1b[1;37mu: Upload file  p: Port forward  (Esc: Cancel) > \x1b[0m"
+    )
     sys.stdout.flush()
 
     # Read action key
@@ -75,7 +128,7 @@ def handle_in_session_menu(
     choice_str = choice_byte.decode("utf-8", errors="ignore").lower()
 
     if choice_byte in (b"\x1b", b"\x03", b"q", b"Q") or choice_str not in ("u", "p"):
-        sys.stdout.write("\r\x1b[K\x1b[dim][kssh] 已取消，返回会话。\x1b[0m\r\n")
+        sys.stdout.write("\r\x1b[K\x1b[dim][kssh] Cancelled. Returning to session.\x1b[0m\r\n")
         sys.stdout.flush()
         return
 
@@ -90,7 +143,7 @@ def handle_in_session_menu(
             sys.stdout.flush()
             return
 
-        clean_local = os.path.expanduser(raw_local.strip().strip("'\""))
+        clean_local = resolve_local_upload_path(raw_local)
         if not clean_local or not os.path.exists(clean_local):
             sys.stdout.write(f"\r\x1b[K\x1b[1;31m[kssh 错误]\x1b[0m 本地文件不存在: {raw_local}\r\n")
             sys.stdout.flush()
@@ -220,40 +273,53 @@ def run_ssh_session(
     con = console or Console(legacy_windows=False)
     ssh_bin = shutil.which("ssh") or "ssh"
 
-    # Record successful connection attempt
-    record_connection(host=host, user=user, port=port, name=name, key_path=key_path)
+    # Ensure secure key permissions on POSIX/WSL
+    key_path = ensure_secure_key_path(key_path)
 
-    cmd = [
-        ssh_bin,
-        "-tt",
-        "-p", str(port),
-        "-o", "StrictHostKeyChecking=accept-new",
-    ]
-    if key_path and os.path.isfile(key_path):
-        cmd.extend(["-i", key_path])
-    if extra_ssh_args:
-        cmd.extend(extra_ssh_args)
+    # Check for WSL target routing (e.g. 'wsl' or 'wsl:Ubuntu') on Windows
+    if sys.platform == "win32" and (host.lower() == "wsl" or host.lower().startswith("wsl:")):
+        distro = host.split(":", 1)[1] if ":" in host else None
+        wsl_bin = shutil.which("wsl.exe") or shutil.which("wsl") or "wsl.exe"
+        cmd = [wsl_bin]
+        if distro:
+            cmd.extend(["-d", distro])
+        if user and user not in ("root", "current"):
+            cmd.extend(["-u", user])
+        if extra_ssh_args:
+            cmd.extend(extra_ssh_args)
+        target_display = f"wsl:{distro or 'default'}"
+    else:
+        cmd = [
+            ssh_bin,
+            "-tt",
+            "-p", str(port),
+            "-o", "StrictHostKeyChecking=accept-new",
+        ]
+        if key_path and os.path.isfile(key_path):
+            cmd.extend(["-i", key_path])
+        if extra_ssh_args:
+            cmd.extend(extra_ssh_args)
+        cmd.append(f"{user}@{host}")
+        target_display = f"{user}@{host}:{port}"
 
-    cmd.append(f"{user}@{host}")
-
-    target_display = f"{user}@{host}:{port}"
-    con.print(f"\n[bold #00f0ff]🌐 Kssh 连接中:[/] [white]{target_display}[/] [dim]({name or host})[/]")
-    con.print("[dim]会话内快捷操作: 按 [bold white]Alt+S[/bold white] 弹出底部功能菜单 (文件上传 / 端口转发)[/dim]\n")
+    con.print(f"\n[bold #00f0ff]🌐 Kssh Connecting:[/] [white]{target_display}[/] [dim]({name or host})[/]")
+    con.print("[dim]In-session shortcuts: [bold white]Alt+S[/bold white] (Menu)[/dim]\n")
 
     try:
         proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
-            stdout=None,  # Output directly to terminal console
+            stdout=None,  # Native terminal stdout passthrough
             stderr=None,
         )
     except Exception as e:
-        con.print(f"[bold #f43f5e]启动 SSH 失败:[/] {e}")
+        con.print(f"[bold #f43f5e]Failed to start SSH:[/] {e}")
         return 1
 
     # Windows input loop
     if sys.platform == "win32":
         import msvcrt
+
 
         # Ignore Ctrl+C in parent process so SIGINT passes through via proc.stdin
         def _ignore_sigint(sig, frame):
@@ -353,7 +419,7 @@ def run_ssh_session(
             signal.signal(signal.SIGINT, old_sigint)
 
     else:
-        # Unix / macOS input loop
+        # Unix / macOS / WSL input loop
         import termios
         import tty
 
@@ -362,14 +428,14 @@ def run_ssh_session(
         try:
             tty.setraw(fd)
             while proc.poll() is None:
-                r, _, _ = select.select([sys.stdin], [], [], 0.02)
+                r, _, _ = select.select([fd], [], [], 0.02)
                 if r:
-                    ch = sys.stdin.read(1).encode("utf-8", errors="ignore")
+                    ch = os.read(fd, 1)
                     if ch == b"\x1b":
-                        # Check if followed by 's'
-                        r_sub, _, _ = select.select([sys.stdin], [], [], 0.03)
+                        # Check if followed by 's' (Alt+S)
+                        r_sub, _, _ = select.select([fd], [], [], 0.03)
                         if r_sub:
-                            next_ch = sys.stdin.read(1).encode("utf-8", errors="ignore")
+                            next_ch = os.read(fd, 1)
                             if next_ch in (b"s", b"S"):
                                 # Restore terminal temporarily for menu
                                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
@@ -391,5 +457,5 @@ def run_ssh_session(
     # Clean up all active tunnels spawned during the session
     tunnel_manager.stop_all()
 
-    con.print(f"\n[dim][kssh] SSH 会话已退出 (退出码: {ret})[/dim]")
+    con.print(f"\n[dim][kssh] SSH session ended (exit code: {ret})[/dim]")
     return ret

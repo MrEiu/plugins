@@ -1,0 +1,25 @@
+tools:
+  aria2:
+    name: "aria2"
+    description: "Ultra-fast multi-protocol & multi-source command-line download utility"
+    bin: "aria2c"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "aria2"
+          - type: "os"
+            manager: "winget"
+            pkg: "aria2.aria2"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "aria2"
+          - type: "os"
+            manager: "apt"
+            pkg: "aria2"
+          - type: "os"
+            manager: "pacman"
+            pkg: "aria2"

@@ -109,9 +109,12 @@ tools:
   7z:
     name: "7z"
     description: "High-compression file archiver"
-    bin: "7z"
+    bin:
+      windows: "7z"
+      unix: "7zz"
     platforms:
       windows:
+        bin: "7z"
         strategy:
           - type: "os"
             manager: "scoop"
@@ -120,10 +123,14 @@ tools:
             manager: "winget"
             pkg: "7zip.7zip"
       unix:
+        bin: "7zz"
         strategy:
           - type: "os"
             manager: "brew"
             pkg: "sevenzip"
+          - type: "os"
+            manager: "apt"
+            pkg: "7zip"
 
   chafa:
     name: "chafa"
