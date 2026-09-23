@@ -173,21 +173,7 @@ def _resolve_mpm_executable() -> Optional[List[str]]:
     if local_bin.exists():
         return [str(local_bin)]
 
-    # 5. Python environment module (kapsel_mpm)
-    try:
-        res = subprocess.run(
-            [sys.executable, "-m", "kapsel_mpm", "--version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=5,
-        )
-        if res.returncode == 0:
-            return [sys.executable, "-m", "kapsel_mpm"]
-    except Exception:
-        pass
-
-    # 6. Python environment module (meta_package_manager)
+    # 5. Python environment module (pip)
     try:
         res = subprocess.run(
             [sys.executable, "-m", "meta_package_manager", "--version"],
@@ -276,12 +262,12 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.3.0",
-        description="Unified cross-platform package installer powered by kapsel-mpm and meta-package-manager with adaptive manager priority.",
+        version="0.2.9",
+        description="Unified cross-platform package installer powered by meta-package-manager (mpm) with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
         min_kapsel_version="0.1.0",
-        dependencies=[],
+        dependencies=["meta-package-manager"],
         tags=["package-manager", "installer", "tools"],
     )
 

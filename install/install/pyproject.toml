@@ -4,15 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-install"
-version = "0.1.1"
-description = "Official Kapsel install plugin bridging meta-package-manager (mpm) and kapsel-mpm for cross-platform package management."
+version = "0.1.0"
+description = "Official Kapsel install plugin bridging meta-package-manager (mpm) for cross-platform package management."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [
     { name = "Kapsel Team" }
 ]
-dependencies = []
+dependencies = [
+    "meta-package-manager>=5.0.0"
+]
 keywords = ["kapsel", "plugin", "install", "mpm", "package-manager", "cli", "cross-platform"]
 classifiers = [
     "Development Status :: 4 - Beta",
