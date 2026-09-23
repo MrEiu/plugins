@@ -258,18 +258,33 @@ def find_available_idle_gpus(
     """
     Finds all physically available and idle GPU indices that satisfy minimum remaining VRAM
     (numerical or percentage) and are not locked by currently executing queue tasks.
+    Returns GPU indices sorted by lowest occupancy (least VRAM used % and core utilization first).
     """
     allocated = allocated_gpu_indices or set()
     all_gpus = probe_all_gpus()
-    idle_indices: List[int] = []
+    idle_gpus: List[GPUInfo] = []
 
     for gpu in all_gpus:
         if gpu.index in allocated:
             continue
         if gpu.is_idle(min_free_vram=min_free_vram, max_util_percent=max_util_percent):
-            idle_indices.append(gpu.index)
+            idle_gpus.append(gpu)
 
-    return idle_indices
+    # Sort available GPUs by lowest occupancy (least loaded first):
+    # 1. Lower VRAM usage percentage (or used MB)
+    # 2. Lower core utilization percentage
+    # 3. Higher absolute free VRAM
+    # 4. GPU index (tie-breaker)
+    idle_gpus.sort(
+        key=lambda g: (
+            g.vram_used_percent,
+            g.utilization_gpu,
+            -g.free_vram_mb,
+            g.index,
+        )
+    )
+
+    return [g.index for g in idle_gpus]
 
 
 def is_system_redundant(

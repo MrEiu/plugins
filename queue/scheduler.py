@@ -368,7 +368,7 @@ def tick(pueue_bin: str) -> List[Tuple[PendingTask, int]]:
                 remaining_pending.append(task_dict)
                 continue
 
-            # Pick the first available idle GPU
+            # Pick the GPU with the lowest occupancy (least VRAM and compute load)
             selected_gpu = idle_gpus[0]
 
             # Replace {gpu} or {GPU} with concrete GPU index

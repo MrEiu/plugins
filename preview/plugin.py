@@ -100,7 +100,7 @@ class PreviewPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="preview",
         name="Preview",
-        version="0.2.6",
+        version="0.2.9",
         description="Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), plus native 3-column Miller Columns file manager (fm).",
         author="Kapsel Team",
         homepage="https://github.com/MrEiu/plugins/tree/master/preview",

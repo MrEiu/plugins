@@ -231,7 +231,7 @@ class QueuePlugin(KapselPlugin):
         return PluginManifest(
             id="queue",
             name="Queue",
-            version="0.1.4",
+            version="0.1.5",
             description="Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
             author="MrEiu",
             homepage="https://github.com/MrEiu/plugins",

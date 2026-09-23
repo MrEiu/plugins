@@ -21,9 +21,9 @@
     "changelog": "Rewritten with PM2 as core engine: polyglot runtimes, cluster mode, zero-downtime reload, and dynamic autocompletion."
   },
   "queue": {
-    "version": "0.1.4",
+    "version": "0.1.5",
     "description": "Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
-    "changelog": "Removed automatic CUDA_VISIBLE_DEVICES injection to avoid PyTorch device index conflicts, added numerical (e.g. 1.0GB, 512MB) and percentage (e.g. 15%) minimum free threshold compatibility in 'look', and added 'kps queue config' to configure all thresholds and limits."
+    "changelog": "Upgraded GPU selection strategy to prioritize lowest-occupancy hardware (least VRAM used % and lowest compute utilization) instead of naive index ordering."
   },
   "fuck": {
     "version": "0.1.0",
@@ -71,9 +71,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "preview": {
-    "version": "0.2.6",
+    "version": "0.2.9",
     "description": "Smart terminal preview dispatcher inspired by Yazi's toolchain (bat, glow, jq, xsv, eza, 7z/7zz, chafa, pdftoppm, ffmpeg, magick, resvg), and native 3-column Miller Columns file manager (fm).",
-    "changelog": "Configured cross-platform 7-Zip binary mapping (7z on Windows, 7zz on Unix) in declarative tools.yaml and added apt package support."
+    "changelog": "Tuned rapid double-tap/continuous acceleration curve (<0.35s) for vertical navigation (Up/Down) in Miller Columns (fm) and synced changes to user plugins directory."
   },
   "update": {
     "version": "0.1.0",
@@ -104,5 +104,10 @@
     "version": "0.1.0",
     "description": "Diagnostic self-healing health checker for plugin tool dependencies and interactive configuration cleaner.",
     "changelog": "Initial release: 4-thread concurrent plugin dependency inspection with auto-fix, and interactive configuration/log/cache cleaner."
+  },
+  "provider": {
+    "version": "0.1.0",
+    "description": "Multi-provider AI model & API proxy switcher powered by cc-switch with zero-friction preset templates and interactive TUI.",
+    "changelog": "Initial release: SaladDay/cc-switch-cli (v5.10.5) integration, 11+ preset profiles (DeepSeek, Claude, OpenAI, OpenRouter, SiliconFlow, Ollama, etc.), CLI/TUI modes, latency testing, and simplified configuration."
   }
 }

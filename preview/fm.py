@@ -9,8 +9,8 @@ Keyboard Navigation:
   [j / Down]       Move selection down
   [k / Up]         Move selection up
   [l / Right]      Enter directory or open file
-  [Enter]          Enter directory or open file
-  [c]              Exit and cd into current / selected directory
+  [Enter]          Exit and cd into current / selected directory
+  [c / y]          Copy selected path to clipboard
   [q / Esc]        Quit without changing directory
 
 All comments and descriptions are in English.
@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from typing import Dict, List, Optional, Tuple
 
 from prompt_toolkit.application import Application
@@ -30,7 +31,7 @@ from prompt_toolkit.layout import HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.styles import Style
 
-from kapsel.ui.prompt import get_safe_output
+from kapsel.ui.prompt import copy_to_clipboard, get_safe_output
 
 
 FM_STYLE = Style.from_dict({
@@ -39,6 +40,7 @@ FM_STYLE = Style.from_dict({
     "fm.header_stat": "dim #38bdf8 bg:#181825",
     "fm.footer": "dim #94a3b8 bg:#181825",
     "fm.footer_key": "bold #38bdf8 bg:#181825",
+    "fm.footer_copied": "bold #10b981 bg:#181825",
     "fm.parent_dir": "dim #38bdf8",
     "fm.parent_file": "dim #64748b",
     "fm.parent_curr": "bold #00f0ff bg:#282a36",
@@ -234,6 +236,10 @@ class FileManagerApp:
         self.current_items: List[Path] = []
         self.parent_items: List[Path] = []
         self.preview_cache: Dict[str, List[Tuple[str, str]]] = {}
+        self.status_message: str = ""
+        self._last_move_time: float = 0.0
+        self._last_move_dir: str = ""
+        self._consecutive_move_count: int = 0
         self.app: Optional[Application] = None
 
         self.refresh_items()
@@ -299,22 +305,53 @@ class FileManagerApp:
             return self.current_items[self.selected_idx]
         return None
 
-    def move_up(self) -> None:
-        """Moves cursor up in current directory."""
-        if self.current_items:
-            self.selected_idx = max(0, self.selected_idx - 1)
-            if self.app:
-                self.app.invalidate()
+    def _calculate_step(self, direction: str) -> int:
+        """
+        Calculates dynamic acceleration step for rapid continuous up/down movements.
+        Single tap = 1 step. Rapid double-tap or hold (<0.35s) immediately accelerates to 3, 5, 8 steps.
+        """
+        now = time.time()
+        # If pressed within 0.35s in the same direction, count as continuous/rapid repeat
+        if direction == self._last_move_dir and (now - self._last_move_time) < 0.35:
+            self._consecutive_move_count += 1
+        else:
+            self._consecutive_move_count = 0
 
-    def move_down(self) -> None:
-        """Moves cursor down in current directory."""
-        if self.current_items:
-            self.selected_idx = min(len(self.current_items) - 1, self.selected_idx + 1)
-            if self.app:
-                self.app.invalidate()
+        self._last_move_time = now
+        self._last_move_dir = direction
+
+        if self._consecutive_move_count >= 3:
+            return 8
+        elif self._consecutive_move_count == 2:
+            return 5
+        elif self._consecutive_move_count == 1:
+            return 3
+        return 1
+
+    def move_up(self, step: Optional[int] = None) -> None:
+        """Moves cursor up in current directory with continuous rapid acceleration."""
+        self.status_message = ""
+        if not self.current_items:
+            return
+        actual_step = step if step is not None else self._calculate_step("up")
+        self.selected_idx = max(0, self.selected_idx - actual_step)
+        if self.app:
+            self.app.invalidate()
+
+    def move_down(self, step: Optional[int] = None) -> None:
+        """Moves cursor down in current directory with continuous rapid acceleration."""
+        self.status_message = ""
+        if not self.current_items:
+            return
+        actual_step = step if step is not None else self._calculate_step("down")
+        self.selected_idx = min(len(self.current_items) - 1, self.selected_idx + actual_step)
+        if self.app:
+            self.app.invalidate()
 
     def enter_dir_or_open(self) -> None:
-        """Enters directory or opens file."""
+        """Enters directory or opens file (strictly single-step point navigation)."""
+        self.status_message = ""
+        self._consecutive_move_count = 0
         selected = self.get_selected_item()
         if not selected:
             return
@@ -329,7 +366,9 @@ class FileManagerApp:
             open_file_externally(selected)
 
     def ascend_to_parent(self) -> None:
-        """Ascends to parent directory."""
+        """Ascends to parent directory (strictly single-step point navigation)."""
+        self.status_message = ""
+        self._consecutive_move_count = 0
         parent = self.current_dir.parent
         if parent != self.current_dir and parent.exists():
             old_name = self.current_dir.name
@@ -342,6 +381,20 @@ class FileManagerApp:
                     break
             if self.app:
                 self.app.invalidate()
+
+    def copy_selected_path(self) -> bool:
+        """Copies the absolute path of the selected item (or current directory) to clipboard."""
+        selected = self.get_selected_item()
+        target_path = str(selected.resolve()) if selected else str(self.current_dir.resolve())
+        success = copy_to_clipboard(target_path)
+        if success:
+            display_name = Path(target_path).name or target_path
+            self.status_message = f"✔ Copied: {display_name}"
+        else:
+            self.status_message = "❌ Failed to copy path"
+        if self.app:
+            self.app.invalidate()
+        return success
 
     def confirm_teleport(self) -> None:
         """Exits and sets target_cd so Kapsel teleports terminal directory."""
@@ -378,17 +431,29 @@ class FileManagerApp:
         ]
 
     def render_footer(self) -> List[Tuple[str, str]]:
-        """Renders bottom shortcut navigation hints."""
+        """Renders bottom shortcut navigation hints or status message."""
+        if self.status_message:
+            return [
+                ("class:fm.footer", " "),
+                ("class:fm.footer_copied", f" {self.status_message} "),
+                ("class:fm.footer", " · "),
+                ("class:fm.footer_key", "[Enter]"),
+                ("class:fm.footer", " CD · "),
+                ("class:fm.footer_key", "[c]"),
+                ("class:fm.footer", " Copy path · "),
+                ("class:fm.footer_key", "[q]"),
+                ("class:fm.footer", " Quit "),
+            ]
         return [
             ("class:fm.footer", " "),
             ("class:fm.footer_key", "[h/l]"),
-            ("class:fm.footer", " Back/Enter · "),
+            ("class:fm.footer", " Back/Open · "),
             ("class:fm.footer_key", "[j/k]"),
             ("class:fm.footer", " Select · "),
             ("class:fm.footer_key", "[Enter]"),
-            ("class:fm.footer", " Open · "),
-            ("class:fm.footer_key", "[c]"),
             ("class:fm.footer", " CD to here · "),
+            ("class:fm.footer_key", "[c]"),
+            ("class:fm.footer", " Copy path · "),
             ("class:fm.footer_key", "[q]"),
             ("class:fm.footer", " Quit "),
         ]
@@ -595,19 +660,32 @@ class FileManagerApp:
         """Builds prompt_toolkit Application with 3-column layout."""
         kb = KeyBindings()
 
-        @kb.add("up")
-        @kb.add("k")
+        @kb.add("up", eager=True)
+        @kb.add("k", eager=True)
         def _up(event):
             self.move_up()
 
-        @kb.add("down")
-        @kb.add("j")
+        @kb.add("down", eager=True)
+        @kb.add("j", eager=True)
         def _down(event):
             self.move_down()
 
+        @kb.add("pageup", eager=True)
+        @kb.add("K", eager=True)
+        @kb.add("s-up", eager=True)
+        @kb.add("c-u", eager=True)
+        def _page_up(event):
+            self.move_up(step=5)
+
+        @kb.add("pagedown", eager=True)
+        @kb.add("J", eager=True)
+        @kb.add("s-down", eager=True)
+        @kb.add("c-d", eager=True)
+        def _page_down(event):
+            self.move_down(step=5)
+
         @kb.add("right")
         @kb.add("l")
-        @kb.add("enter")
         def _right(event):
             self.enter_dir_or_open()
 
@@ -616,9 +694,14 @@ class FileManagerApp:
         def _left(event):
             self.ascend_to_parent()
 
-        @kb.add("c")
-        def _cd(event):
+        @kb.add("enter")
+        def _enter(event):
             self.confirm_teleport()
+
+        @kb.add("c")
+        @kb.add("y")
+        def _copy(event):
+            self.copy_selected_path()
 
         @kb.add("q")
         @kb.add("escape")

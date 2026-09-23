@@ -86,7 +86,9 @@ kps preview fm [path]
 | `h` / `←` | Ascend to parent directory |
 | `j` / `↓` | Move cursor down (instant live preview on right) |
 | `k` / `↑` | Move cursor up (instant live preview on right) |
-| `l` / `→` / `Enter` | Enter folder, or open file with default editor/viewer |
-| `c` | **Teleport (cd)**: Exit and switch Kapsel terminal working directory to selected folder |
+| `l` / `→` | Enter folder, or open file with default editor/viewer |
+| `Enter` | **Teleport (cd)**: Exit and switch Kapsel terminal working directory to selected folder |
+| `c` / `y` | **Copy Path**: Copy selected file or folder absolute path to clipboard |
 | `q` / `Esc` | Quit without changing directory |
+
 

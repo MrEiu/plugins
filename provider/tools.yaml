@@ -1,0 +1,31 @@
+tools:
+  cc-switch:
+    name: "cc-switch"
+    package: "cc-switch-cli"
+    description: "Multi-provider AI model & API proxy switcher for Claude Code and coding agents"
+    bin: "cc-switch"
+    version: "v5.10.5"
+    upstream: "https://github.com/SaladDay/cc-switch-cli"
+    platforms:
+      macos:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "cc-switch-cli"
+          - type: "script"
+            cmd: "curl -fsSL https://raw.githubusercontent.com/SaladDay/cc-switch-cli/main/install.sh | bash"
+          - type: "cargo"
+            pkg: "cc-switch-cli"
+          - type: "npm"
+            pkg: "cc-switch-cli"
+      linux:
+        strategy:
+          - type: "os"
+            manager: "pacman"
+            pkg: "cc-switch-cli"
+          - type: "script"
+            cmd: "curl -fsSL https://raw.githubusercontent.com/SaladDay/cc-switch-cli/main/install.sh | bash"
+          - type: "cargo"
+            pkg: "cc-switch-cli"
+          - type: "npm"
+            pkg: "cc-switch-cli"
