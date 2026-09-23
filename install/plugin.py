@@ -276,7 +276,7 @@ class InstallPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="install",
         name="Install",
-        version="0.3.0",
+        version="0.3.1",
         description="Unified cross-platform package installer powered by kapsel-mpm and meta-package-manager with adaptive manager priority.",
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
@@ -393,8 +393,8 @@ class InstallPlugin(KapselPlugin):
         detected = _detect_installed_managers()
         sorted_managers = _sort_managers_by_platform(detected, plat_key)
 
-        # Default disabled managers defined in defaults.yaml (e.g. raw pip to avoid global pollution)
-        default_disabled = _load_defaults().get("default_disabled", ["pip"])
+        # Default disabled managers defined in defaults.yaml
+        default_disabled = _load_defaults().get("default_disabled", [])
         disabled: List[str] = []
         for m in default_disabled:
             if m in sorted_managers:

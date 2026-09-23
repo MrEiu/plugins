@@ -41,9 +41,9 @@
     "changelog": "Added multi-language Carapace completion specifications across 7 languages."
   },
   "install": {
-    "version": "0.3.0",
+    "version": "0.3.1",
     "description": "Unified cross-platform package installer powered by kapsel-mpm and meta-package-manager with platform lock bypass, custom manager paths, dynamic priority, and batch adapter.",
-    "changelog": "Decoupled hard dependency on meta-package-manager in packaging and manifest, and added python module resolution for kapsel-mpm."
+    "changelog": "Unblocked pip from default disabled managers to allow seamless pip-based package operations out of the box."
   },
   "kssh": {
     "version": "0.1.4",

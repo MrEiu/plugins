@@ -211,8 +211,7 @@ distro_patterns:
 # ------------------------------------------------------------------------------
 # 4. Default disabled managers (e.g. raw pip to avoid polluting system/user Python)
 # ------------------------------------------------------------------------------
-default_disabled:
-  - pip
+default_disabled: []
 
 # ------------------------------------------------------------------------------
 # 5. CLI Flags that indicate explicit manager selection in mpm
