@@ -1,0 +1,206 @@
+tools:
+  bat:
+    name: "bat"
+    description: "A cat clone with wings (syntax highlighting)"
+    bin: "bat"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "bat"
+          - type: "os"
+            manager: "winget"
+            pkg: "sharkdp.bat"
+          - type: "cargo"
+            pkg: "bat"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "bat"
+          - type: "cargo"
+            pkg: "bat"
+
+  glow:
+    name: "glow"
+    description: "Render markdown on the CLI"
+    bin: "glow"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "glow"
+          - type: "os"
+            manager: "winget"
+            pkg: "Charmbracelet.Glow"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "glow"
+
+  jq:
+    name: "jq"
+    description: "Command-line JSON processor"
+    bin: "jq"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "jq"
+          - type: "os"
+            manager: "winget"
+            pkg: "jqlang.jq"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "jq"
+          - type: "os"
+            manager: "apt"
+            pkg: "jq"
+
+  xsv:
+    name: "xsv"
+    description: "Fast CSV command line toolkit written in Rust"
+    bin: "xsv"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "xsv"
+          - type: "cargo"
+            pkg: "xsv"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "xsv"
+          - type: "cargo"
+            pkg: "xsv"
+
+  eza:
+    name: "eza"
+    description: "Modern, maintained replacement for ls"
+    bin: "eza"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "eza"
+          - type: "os"
+            manager: "winget"
+            pkg: "eza-community.eza"
+          - type: "cargo"
+            pkg: "eza"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "eza"
+          - type: "cargo"
+            pkg: "eza"
+
+  7z:
+    name: "7z"
+    description: "High-compression file archiver"
+    bin:
+      windows: "7z"
+      unix: "7zz"
+    platforms:
+      windows:
+        bin: "7z"
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "7zip"
+          - type: "os"
+            manager: "winget"
+            pkg: "7zip.7zip"
+      unix:
+        bin: "7zz"
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "sevenzip"
+          - type: "os"
+            manager: "apt"
+            pkg: "7zip"
+
+  chafa:
+    name: "chafa"
+    description: "Terminal graphics and character art generator"
+    bin: "chafa"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "chafa"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "chafa"
+          - type: "os"
+            manager: "apt"
+            pkg: "chafa"
+
+  pdftoppm:
+    name: "pdftoppm"
+    description: "PDF to image converter and visual page rasterizer (Poppler)"
+    bin: "pdftoppm"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "poppler"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "poppler"
+          - type: "os"
+            manager: "apt"
+            pkg: "poppler-utils"
+
+  mediainfo:
+    name: "mediainfo"
+    description: "Media information and metadata viewer"
+    bin: "mediainfo"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "mediainfo"
+          - type: "os"
+            manager: "winget"
+            pkg: "MediaArea.MediaInfo.CLI"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "mediainfo"
+
+  xxd:
+    name: "xxd"
+    description: "Hex viewer and binary analysis utility"
+    bin: "xxd"
+    platforms:
+      windows:
+        strategy:
+          - type: "os"
+            manager: "scoop"
+            pkg: "vim"
+      unix:
+        strategy:
+          - type: "os"
+            manager: "brew"
+            pkg: "xxd"

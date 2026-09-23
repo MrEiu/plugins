@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-preview"
+version = "0.2.5"
+description = "Universal smart terminal preview dispatcher mapping 10 file categories directly to industry-standard CLI tools."
+authors = [{ name = "Kapsel Team" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]

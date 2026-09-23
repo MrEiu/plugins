@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kapsel-plugin-queue"
+version = "0.1.2"
+description = "Autonomous background task queue and daemon execution manager for Kapsel powered by Pueue."
+readme = "README.md"
+authors = [{ name = "MrEiu" }]
+license = { text = "MIT" }
+keywords = ["kapsel", "plugin", "queue", "autopilot", "pueue", "daemon", "cli"]
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.entry-points."kapsel.plugins"]
+queue = "plugins.queue:Plugin"
+autopilot = "plugins.queue:Plugin"
