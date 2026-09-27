@@ -30,7 +30,7 @@ class KapselWorkbenchApp(App):
     Full-screen developer workbench with permanent left file tree and right native PTY terminal.
     """
 
-    CSS_PATH = "styles.tcss"
+    CSS_PATH = Path(__file__).parent / "styles.tcss"
 
     def __init__(self, workspace_path: Optional[Path] = None, **kwargs):
         super().__init__(**kwargs)

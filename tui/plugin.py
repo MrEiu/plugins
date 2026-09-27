@@ -15,22 +15,26 @@ from rich.console import Console
 
 from kapsel.core.plugin.base import KapselPlugin, PluginManifest
 from kapsel.core.plugin.context import PluginContext
-from .app import KapselWorkbenchApp
+# Safe import pattern matching gold-standard template
+try:
+    from .app import KapselWorkbenchApp
+except ImportError:
+    from plugins.tui.app import KapselWorkbenchApp
 
 
 class TuiPlugin(KapselPlugin):
     """Full-screen developer workbench plugin for Kapsel."""
 
-    @property
-    def manifest(self) -> PluginManifest:
-        return PluginManifest(
-            id="tui",
-            name="TUI",
-            version="0.1.0",
-            description="Full-screen developer workbench and split TUI for Kapsel featuring permanent file tree, native multi-tab PTY terminal, and Textual UI shell.",
-            author="MrEiu",
-            homepage="https://github.com/MrEiu/plugins",
-        )
+    manifest = PluginManifest(
+        id="tui",
+        name="TUI",
+        version="0.1.0",
+        description="Full-screen developer workbench and split TUI for Kapsel featuring permanent file tree, native multi-tab PTY terminal, and Textual UI shell.",
+        author="MrEiu",
+        homepage="https://github.com/MrEiu/plugins",
+        min_kapsel_version="0.1.0",
+        tags=["tui", "workbench", "terminal", "filetree", "split"],
+    )
 
     def on_load(self, context: PluginContext) -> None:
         """Registers 'kps tui' command into Kapsel Command Registry."""
