@@ -281,7 +281,7 @@ class InstallPlugin(KapselPlugin):
         author="Kapsel Team",
         homepage="https://github.com/kapsel-shell/kapsel-plugin-install",
         min_kapsel_version="0.1.0",
-        dependencies=[],
+        dependencies=["meta-package-manager"],
         tags=["package-manager", "installer", "tools"],
     )
 

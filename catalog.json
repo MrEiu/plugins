@@ -21,9 +21,9 @@
     "changelog": "Rewritten with PM2 as core engine: polyglot runtimes, cluster mode, zero-downtime reload, and dynamic autocompletion."
   },
   "queue": {
-    "version": "0.1.5",
+    "version": "0.1.7",
     "description": "Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
-    "changelog": "Upgraded GPU selection strategy to prioritize lowest-occupancy hardware (least VRAM used % and lowest compute utilization) instead of naive index ordering."
+    "changelog": "Enhanced 'clean' command with zero-loss archiving: saves summary.log, raw snapshot.json, and per-task console output logs before purging history."
   },
   "fuck": {
     "version": "0.1.0",

@@ -7,6 +7,7 @@ bracket-based condition/command entry, and autonomous task dispatching.
 All comments and descriptions are in English.
 """
 
+import datetime
 import json
 import os
 from pathlib import Path
@@ -214,6 +215,30 @@ def _ensure_scheduler_supervised(pueue_bin: str) -> None:
         pass
 
 
+def _parse_pueue_iso(ts: Optional[str]) -> Optional[datetime.datetime]:
+    """Parses Pueue ISO 8601 timestamps, sanitizing nanoseconds to 6 digits."""
+    if not ts:
+        return None
+    ts_clean = re.sub(r'(\.\d{6})\d+', r'\1', str(ts))
+    try:
+        return datetime.datetime.fromisoformat(ts_clean)
+    except Exception:
+        return None
+
+
+def _format_seconds(sec: float) -> str:
+    """Formats duration in seconds to a human-readable string (e.g. '42.5s', '3m 12s')."""
+    if sec < 60:
+        return f"{sec:.1f}s"
+    mins = int(sec // 60)
+    rem_secs = sec % 60
+    if mins < 60:
+        return f"{mins}m {rem_secs:.0f}s"
+    hours = int(mins // 60)
+    rem_mins = mins % 60
+    return f"{hours}h {rem_mins}m"
+
+
 class QueuePlugin(KapselPlugin):
     """
     Queue plugin integrating Pueue for background execution, hardware resource redundancy probing,
@@ -231,7 +256,7 @@ class QueuePlugin(KapselPlugin):
         return PluginManifest(
             id="queue",
             name="Queue",
-            version="0.1.5",
+            version="0.1.7",
             description="Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
             author="MrEiu",
             homepage="https://github.com/MrEiu/plugins",
@@ -240,35 +265,34 @@ class QueuePlugin(KapselPlugin):
     def on_load(self, context: PluginContext) -> None:
         self.pueue_bin, self.pueued_bin = _resolve_pueue_executables()
 
-        # Register 'queue' command into Kapsel Command Registry (with 'auto' as backward compatibility alias)
-        for cmd_alias in ("queue", "auto"):
-            context.register_kps_command(
-                name=cmd_alias,
-                handler=self.handle_queue_command,
-                help_text="Autonomous task queue & resource-aware governor with multi-GPU auto-dispatch (powered by Pueue)",
-                subcommands={
-                    "add": "Enqueue task with resource checking & {gpu} matching: kps queue add [condition] [command]",
-                    "look": "Inspect hardware resource redundancy (CPU, RAM, all GPUs VRAM & utilization)",
-                    "status": "Display active running tasks, allocated GPUs, and pending queue",
-                    "config": "View or adjust thresholds: kps queue config [--min-ram 1.0GB] [--min-vram 20%] [--limit 4]",
-                    "limit": "View or adjust maximum concurrent running tasks (default 4)",
-                    "interval": "View or adjust periodic scheduler check interval (default 5s)",
-                    "pending": "View and manage pending tasks waiting for resources",
-                    "log": "Display stdout/stderr output log for a specific task",
-                    "follow": "Stream real-time log output for a running task (tail -f style)",
-                    "pause": "Pause running tasks or entire task groups",
-                    "start": "Resume execution of paused tasks or groups",
-                    "restart": "Restart completed or failed task(s)",
-                    "kill": "Terminate running task(s) or whole groups",
-                    "clean": "Remove finished/successful tasks from queue history",
-                    "reset": "Kill all running tasks and reset entire queue",
-                    "parallel": "Adjust Pueue maximum concurrent worker tasks",
-                    "group": "Manage task groups and queues",
-                    "daemon": "Manage Pueue background service (status, start, stop, restart)",
-                },
-                usage=f"kps {cmd_alias} [add|look|status|config|limit|interval|pending|log|follow|pause|start|kill|clean|daemon] [args...]",
-                scope="feature",
-            )
+        # Register 'queue' command into Kapsel Command Registry
+        context.register_kps_command(
+            name="queue",
+            handler=self.handle_queue_command,
+            help_text="Autonomous task queue & resource-aware governor with multi-GPU auto-dispatch (powered by Pueue)",
+            subcommands={
+                "add": "Enqueue task with resource checking & {gpu} matching: kps queue add [condition] [command]",
+                "look": "Inspect hardware resource redundancy (CPU, RAM, all GPUs VRAM & utilization)",
+                "status": "Display active running tasks, allocated GPUs, and pending queue",
+                "config": "View or adjust thresholds: kps queue config [--min-ram 1.0GB] [--min-vram 20%] [--limit 4]",
+                "limit": "View or adjust maximum concurrent running tasks (default 4)",
+                "interval": "View or adjust periodic scheduler check interval (default 5s)",
+                "pending": "View and manage pending tasks waiting for resources",
+                "log": "Display stdout/stderr output log for a specific task",
+                "follow": "Stream real-time log output for a running task (tail -f style)",
+                "pause": "Pause running tasks or entire task groups",
+                "start": "Resume execution of paused tasks or groups",
+                "restart": "Restart completed or failed task(s)",
+                "kill": "Terminate running task(s) or whole groups",
+                "clean": "Remove finished/successful tasks from queue history",
+                "reset": "Kill all running tasks and reset entire queue",
+                "parallel": "Adjust Pueue maximum concurrent worker tasks",
+                "group": "Manage task groups and queues",
+                "daemon": "Manage Pueue background service (status, start, stop, restart)",
+            },
+            usage="kps queue [add|look|status|config|limit|interval|pending|log|follow|pause|start|kill|clean|daemon] [args...]",
+            scope="feature",
+        )
 
         # Register dynamic autocompletion hook
         context.register_hook(HookType.PROVIDE_COMPLETIONS, self.provide_completions)
@@ -343,7 +367,7 @@ class QueuePlugin(KapselPlugin):
         elif sub in ("kill", "stop"):
             return self._run_passthrough(["kill"] + sub_args, con)
         elif sub in ("clean", "clear"):
-            return self._run_passthrough(["clean"] + sub_args, con)
+            return self._handle_clean(sub_args, con)
         elif sub == "reset":
             return self._run_passthrough(["reset"] + sub_args, con)
         elif sub in ("parallel",):
@@ -838,6 +862,238 @@ class QueuePlugin(KapselPlugin):
             con.print(f"[bold #f43f5e]Unknown daemon action:[/] '{action}' (options: status, start, stop, restart)")
             return 1
 
+    def _handle_clean(self, args: List[str], con: Console) -> int:
+        """
+        Safely archives the complete queue status metadata, human-readable summary,
+        and full per-task stdout/stderr output logs before executing 'pueue clean'.
+
+        Archive Directory Structure:
+            ~/.kapsel/queue/archives/YYYY-MM-DD_HHMMSS/
+                ├── summary.log   (Human-readable overview table & error excerpts)
+                ├── snapshot.json (Complete raw JSON metadata backup)
+                └── logs/         (Individual task stdout/stderr console logs)
+                    ├── task_1_npm-run-build_ok.log
+                    └── ...
+        """
+        # 1. Fetch current status and full logs JSON from Pueue
+        status_data: Dict[str, Any] = {}
+        log_data: Dict[str, Any] = {}
+
+        try:
+            res_st = subprocess.run([self.pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=2.0)
+            if res_st.returncode == 0 and res_st.stdout.strip():
+                status_data = json.loads(res_st.stdout)
+        except Exception:
+            pass
+
+        try:
+            res_log = subprocess.run([self.pueue_bin, "log", "--json"], capture_output=True, text=True, timeout=2.5)
+            if res_log.returncode == 0 and res_log.stdout.strip():
+                log_data = json.loads(res_log.stdout)
+        except Exception:
+            pass
+
+        all_tasks: Dict[str, Any] = status_data.get("tasks", {})
+        # Filter out internal supervisor task
+        tasks_to_archive = {k: v for k, v in all_tasks.items() if v.get("group") != "_scheduler"}
+
+        # Identify completed tasks eligible for cleanup
+        done_tasks = {}
+        for tid, t in tasks_to_archive.items():
+            st = t.get("status", {})
+            if "Done" in st:
+                done_tasks[tid] = t
+
+        now = datetime.datetime.now()
+        timestamp_str = now.strftime("%Y-%m-%d_%H%M%S")
+        archive_dir = get_kapsel_dir() / "queue" / "archives" / timestamp_str
+        logs_dir = archive_dir / "logs"
+
+        if done_tasks:
+            try:
+                logs_dir.mkdir(parents=True, exist_ok=True)
+
+                # Step 1: Write raw snapshot.json
+                snapshot_payload = {
+                    "archived_at": now.isoformat(),
+                    "clean_args": args,
+                    "total_tasks_count": len(tasks_to_archive),
+                    "done_tasks_count": len(done_tasks),
+                    "tasks": tasks_to_archive,
+                    "logs": log_data,
+                }
+                snapshot_file = archive_dir / "snapshot.json"
+                snapshot_file.write_text(json.dumps(snapshot_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+                # Step 2: Build summary rows and write individual per-task logs in logs/
+                summary_rows: List[Dict[str, str]] = []
+                failed_details: List[Tuple[str, str, str, str]] = []
+
+                for tid, t in sorted(tasks_to_archive.items(), key=lambda x: int(x[0])):
+                    cmd = t.get("command") or t.get("original_command") or ""
+                    path = t.get("path") or ""
+                    group = t.get("group") or "default"
+                    label = t.get("label") or "none"
+                    st_obj = t.get("status", {})
+
+                    status_str = "UNKNOWN"
+                    exit_code = "-"
+                    started_str = "-"
+                    finished_str = "-"
+                    duration_str = "-"
+                    is_failed = False
+
+                    if "Done" in st_obj:
+                        done_info = st_obj["Done"]
+                        res_val = done_info.get("result")
+                        if res_val == "Success":
+                            status_str = "SUCCESS"
+                            exit_code = "0"
+                        elif isinstance(res_val, dict) and "Failed" in res_val:
+                            status_str = "FAILED"
+                            exit_code = str(res_val["Failed"])
+                            is_failed = True
+                        elif res_val == "Killed":
+                            status_str = "KILLED"
+                            exit_code = "137"
+                            is_failed = True
+                        else:
+                            status_str = str(res_val)
+                            is_failed = True
+
+                        start_dt = _parse_pueue_iso(done_info.get("start"))
+                        end_dt = _parse_pueue_iso(done_info.get("end"))
+                        if start_dt:
+                            started_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                        if end_dt:
+                            finished_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+                        if start_dt and end_dt:
+                            dur_sec = max(0.0, (end_dt - start_dt).total_seconds())
+                            duration_str = _format_seconds(dur_sec)
+                    elif "Running" in st_obj:
+                        status_str = "RUNNING"
+                        start_dt = _parse_pueue_iso(st_obj["Running"].get("start"))
+                        if start_dt:
+                            started_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+                    elif "Queued" in st_obj:
+                        status_str = "QUEUED"
+                    elif "Paused" in st_obj:
+                        status_str = "PAUSED"
+
+                    summary_rows.append({
+                        "id": str(tid),
+                        "status": status_str,
+                        "exit": exit_code,
+                        "duration": duration_str,
+                        "started": started_str,
+                        "finished": finished_str,
+                        "command": cmd,
+                    })
+
+                    # Retrieve task stdout / stderr
+                    task_log_obj = log_data.get(str(tid), {})
+                    output_text = task_log_obj.get("output", "") if isinstance(task_log_obj, dict) else ""
+
+                    # Sanitize command slug for clean filenames
+                    clean_slug = re.sub(r'[^a-zA-Z0-9_\-\.]+', '_', cmd.strip())[:25].strip('_') or "cmd"
+                    status_slug = "ok" if status_str == "SUCCESS" else status_str.lower()
+                    task_filename = f"task_{tid}_{clean_slug}_{status_slug}.log"
+                    task_log_path = logs_dir / task_filename
+
+                    task_file_content = (
+                        f"{'=' * 80}\n"
+                        f"KAPSEL QUEUE TASK ARCHIVE - TASK #{tid}\n"
+                        f"{'=' * 80}\n"
+                        f"Command         : {cmd}\n"
+                        f"Status          : {status_str} (Exit Code: {exit_code})\n"
+                        f"Working Dir     : {path}\n"
+                        f"Group / Label   : {group} / {label}\n"
+                        f"Created At      : {t.get('created_at', '-')}\n"
+                        f"Started At      : {started_str}\n"
+                        f"Finished At     : {finished_str}\n"
+                        f"Execution Time  : {duration_str}\n"
+                        f"{'=' * 80}\n"
+                        f"[STDOUT / STDERR CONSOLE OUTPUT]\n"
+                        f"{'=' * 80}\n\n"
+                        f"{output_text}\n"
+                    )
+                    task_log_path.write_text(task_file_content, encoding="utf-8")
+
+                    if is_failed and output_text:
+                        lines = output_text.strip().splitlines()
+                        error_tail = "\n".join(lines[-15:]) if len(lines) > 15 else "\n".join(lines)
+                        failed_details.append((str(tid), cmd, exit_code, error_tail))
+
+                # Step 3: Write human-readable summary.log
+                total_cnt = len(tasks_to_archive)
+                success_cnt = sum(1 for r in summary_rows if r["status"] == "SUCCESS")
+                failed_cnt = sum(1 for r in summary_rows if r["status"] in ("FAILED", "KILLED"))
+                other_cnt = total_cnt - success_cnt - failed_cnt
+
+                clean_cmd_str = f"kps queue clean {' '.join(args)}".strip()
+                summary_lines = [
+                    "=" * 80,
+                    "KAPSEL QUEUE STATUS ARCHIVE",
+                    f"Archive Time : {now.strftime('%Y-%m-%d %H:%M:%S')}",
+                    f"Clean Command: {clean_cmd_str}",
+                    f"Total Tasks  : {total_cnt} (Success: {success_cnt}, Failed: {failed_cnt}, Other: {other_cnt})",
+                    "=" * 80,
+                    "",
+                    "[SUMMARY TABLE]",
+                    f"{'ID':<6} {'STATUS':<10} {'EXIT':<6} {'DURATION':<12} {'STARTED':<20} {'FINISHED':<20} COMMAND",
+                    "-" * 100,
+                ]
+
+                for r in summary_rows:
+                    summary_lines.append(
+                        f"#{r['id']:<5} {r['status']:<10} {r['exit']:<6} {r['duration']:<12} {r['started']:<20} {r['finished']:<20} {r['command']}"
+                    )
+
+                if failed_details:
+                    summary_lines.extend([
+                        "",
+                        "=" * 80,
+                        "[FAILED TASK ERROR SNIPPETS]",
+                        "=" * 80,
+                    ])
+                    for tid, cmd, exit_code, err_snippet in failed_details:
+                        summary_lines.extend([
+                            f"\n--- Task #{tid} ({cmd}) [Exit Code: {exit_code}] ---",
+                            err_snippet,
+                        ])
+
+                summary_lines.extend([
+                    "",
+                    "=" * 80,
+                    "End of Archive",
+                    "=" * 80,
+                    "",
+                ])
+
+                summary_file = archive_dir / "summary.log"
+                summary_file.write_text("\n".join(summary_lines), encoding="utf-8")
+
+            except Exception as e:
+                con.print(f"[bold #f59e0b]Warning:[/] Failed to write queue archive snapshot: {e}")
+
+        # 2. Execute actual pueue clean
+        clean_res = subprocess.run([self.pueue_bin, "clean"] + args, capture_output=True, text=True)
+        if clean_res.returncode == 0:
+            if done_tasks and archive_dir.exists():
+                con.print(f"[bold #10b981]✔ Successfully cleaned {len(done_tasks)} completed task(s).[/]")
+                con.print(f"[dim]📦 Full status & output archive saved to:[/] [bold #00f0ff]{archive_dir}[/]")
+                con.print("  [dim]├── summary.log   (Human-readable summary table)[/]")
+                con.print("  [dim]├── snapshot.json (Raw JSON metadata backup)[/]")
+                con.print(f"  [dim]└── logs/         ({len(done_tasks)} task console output files)[/]\n")
+            else:
+                out_msg = clean_res.stdout.strip() or "No completed tasks to clean."
+                con.print(f"[bold #10b981]✔ {out_msg}[/]\n")
+            return 0
+        else:
+            err_msg = clean_res.stderr.strip() or clean_res.stdout.strip()
+            con.print(f"[bold #f43f5e]Error cleaning queue:[/] {err_msg}\n")
+            return clean_res.returncode
+
     def _run_passthrough(self, args: List[str], con: Console) -> int:
         """Executes pueue command with full terminal interactivity and streaming."""
         try:
@@ -849,7 +1105,7 @@ class QueuePlugin(KapselPlugin):
 
     def provide_completions(self, text_before_cursor: str) -> List[Dict[str, Any]]:
         """
-        Dynamically generates completions for 'kps queue' / 'kps auto'.
+        Dynamically generates completions for 'kps queue'.
         Extracts subcommands and active task IDs from Pueue JSON.
         """
         command_line = text_before_cursor
@@ -860,10 +1116,10 @@ class QueuePlugin(KapselPlugin):
             return []
 
         first = tokens[0].lower()
-        if first in ("kps", "kapsel") and len(tokens) >= 2 and tokens[1].lower() in ("queue", "auto"):
-            auto_args = tokens[2:]
-        elif first in ("queue", "auto"):
-            auto_args = tokens[1:]
+        if first in ("kps", "kapsel") and len(tokens) >= 2 and tokens[1].lower() == "queue":
+            queue_args = tokens[2:]
+        elif first == "queue":
+            queue_args = tokens[1:]
         else:
             return []
 
@@ -886,8 +1142,8 @@ class QueuePlugin(KapselPlugin):
             ("daemon", "Manage Pueue background service (status, start, stop)"),
         ]
 
-        if not auto_args or (len(auto_args) == 1 and not ends_with_space):
-            prefix = auto_args[0].lower() if auto_args else ""
+        if not queue_args or (len(queue_args) == 1 and not ends_with_space):
+            prefix = queue_args[0].lower() if queue_args else ""
             return [
                 {
                     "text": name,
@@ -900,18 +1156,18 @@ class QueuePlugin(KapselPlugin):
             ]
 
         # Case 2: Dynamic completions for task IDs
-        sub = auto_args[0].lower() if auto_args else ""
+        sub = queue_args[0].lower() if queue_args else ""
         if sub in ("log", "follow", "kill", "restart", "pause", "start", "tail") and (
-            (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
+            (len(queue_args) == 1 and ends_with_space) or (len(queue_args) == 2 and not ends_with_space)
         ):
-            target_prefix = auto_args[1].lower() if len(auto_args) == 2 else ""
+            target_prefix = queue_args[1].lower() if len(queue_args) == 2 else ""
             return self._query_task_id_completions(target_prefix)
 
         # Case 3: Daemon subcommands
         if sub == "daemon" and (
-            (len(auto_args) == 1 and ends_with_space) or (len(auto_args) == 2 and not ends_with_space)
+            (len(queue_args) == 1 and ends_with_space) or (len(queue_args) == 2 and not ends_with_space)
         ):
-            d_prefix = auto_args[1].lower() if len(auto_args) == 2 else ""
+            d_prefix = queue_args[1].lower() if len(queue_args) == 2 else ""
             actions = [
                 ("status", "Check if daemon is currently alive"),
                 ("start", "Launch daemon in background"),
@@ -983,6 +1239,5 @@ class QueuePlugin(KapselPlugin):
             return []
 
 
-# Backward compatibility and Kapsel plugin export
-AutopilotPlugin = QueuePlugin
+# Kapsel plugin export
 Plugin = QueuePlugin

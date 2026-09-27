@@ -11,6 +11,8 @@ Keyboard Navigation:
   [l / Right]      Enter directory or open file
   [Enter]          Exit and cd into current / selected directory
   [c / y]          Copy selected path to clipboard
+  [s]              Copy selected file / folder to clipboard
+  [Alt+v / p]      Paste copied file / folder into current directory
   [q / Esc]        Quit without changing directory
 
 All comments and descriptions are in English.
@@ -31,7 +33,12 @@ from prompt_toolkit.layout import HSplit, Layout, VSplit, Window
 from prompt_toolkit.layout.controls import FormattedTextControl
 from prompt_toolkit.styles import Style
 
-from kapsel.ui.prompt import copy_to_clipboard, get_safe_output
+from kapsel.core.tools.clipboard import (
+    copy as clip_copy,
+    copy_files as clip_copy_files,
+    paste as clip_paste,
+)
+from kapsel.ui.prompt import get_safe_output
 
 
 FM_STYLE = Style.from_dict({
@@ -386,15 +393,84 @@ class FileManagerApp:
         """Copies the absolute path of the selected item (or current directory) to clipboard."""
         selected = self.get_selected_item()
         target_path = str(selected.resolve()) if selected else str(self.current_dir.resolve())
-        success = copy_to_clipboard(target_path)
+        success = clip_copy(target_path)
         if success:
             display_name = Path(target_path).name or target_path
-            self.status_message = f"✔ Copied: {display_name}"
+            self.status_message = f"✔ Path copied: {display_name}"
         else:
             self.status_message = "❌ Failed to copy path"
         if self.app:
             self.app.invalidate()
         return success
+
+    def copy_selected_file(self) -> bool:
+        """Copies the selected file/folder object to the local clipboard."""
+        selected = self.get_selected_item()
+        target = selected or self.current_dir
+        success = clip_copy_files([target])
+        if success:
+            display_name = target.name or str(target)
+            self.status_message = f"✔ File copied: {display_name}"
+        else:
+            self.status_message = "❌ Failed to copy file"
+        if self.app:
+            self.app.invalidate()
+        return success
+
+    def paste_clipboard(self) -> bool:
+        """Pastes file(s) or folder(s) from clipboard into the current directory."""
+        raw_content = clip_paste(text=True)
+        if not raw_content:
+            self.status_message = "❌ Clipboard is empty"
+            if self.app:
+                self.app.invalidate()
+            return False
+
+        lines = [line.strip().strip('"').strip("'") for line in raw_content.splitlines() if line.strip()]
+        pasted_count = 0
+        last_name = ""
+
+        for path_str in lines:
+            src = Path(path_str)
+            if not src.exists():
+                continue
+
+            dest_name = src.name
+            dest = self.current_dir / dest_name
+
+            # Avoid self-overwrite by incrementing filename if dest exists
+            if dest.exists() and dest.resolve() == src.resolve():
+                stem, suffix = src.stem, src.suffix
+                counter = 1
+                while dest.exists():
+                    dest = self.current_dir / f"{stem}_copy{counter}{suffix}"
+                    counter += 1
+
+            try:
+                if src.is_dir():
+                    shutil.copytree(src, dest, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src, dest)
+                pasted_count += 1
+                last_name = dest.name
+            except Exception as e:
+                self.status_message = f"❌ Paste error: {e}"
+                if self.app:
+                    self.app.invalidate()
+                return False
+
+        if pasted_count > 0:
+            self.refresh_items()
+            msg = f"✔ Pasted: {last_name}" if pasted_count == 1 else f"✔ Pasted {pasted_count} items"
+            self.status_message = msg
+            if self.app:
+                self.app.invalidate()
+            return True
+        else:
+            self.status_message = "❌ No valid file found in clipboard"
+            if self.app:
+                self.app.invalidate()
+            return False
 
     def confirm_teleport(self) -> None:
         """Exits and sets target_cd so Kapsel teleports terminal directory."""
@@ -440,7 +516,11 @@ class FileManagerApp:
                 ("class:fm.footer_key", "[Enter]"),
                 ("class:fm.footer", " CD · "),
                 ("class:fm.footer_key", "[c]"),
-                ("class:fm.footer", " Copy path · "),
+                ("class:fm.footer", " Path · "),
+                ("class:fm.footer_key", "[s]"),
+                ("class:fm.footer", " File · "),
+                ("class:fm.footer_key", "[Alt+v]"),
+                ("class:fm.footer", " Paste · "),
                 ("class:fm.footer_key", "[q]"),
                 ("class:fm.footer", " Quit "),
             ]
@@ -450,10 +530,14 @@ class FileManagerApp:
             ("class:fm.footer", " Back/Open · "),
             ("class:fm.footer_key", "[j/k]"),
             ("class:fm.footer", " Select · "),
-            ("class:fm.footer_key", "[Enter]"),
-            ("class:fm.footer", " CD to here · "),
             ("class:fm.footer_key", "[c]"),
             ("class:fm.footer", " Copy path · "),
+            ("class:fm.footer_key", "[s]"),
+            ("class:fm.footer", " Copy file · "),
+            ("class:fm.footer_key", "[Alt+v]"),
+            ("class:fm.footer", " Paste · "),
+            ("class:fm.footer_key", "[Enter]"),
+            ("class:fm.footer", " CD · "),
             ("class:fm.footer_key", "[q]"),
             ("class:fm.footer", " Quit "),
         ]
@@ -700,8 +784,19 @@ class FileManagerApp:
 
         @kb.add("c")
         @kb.add("y")
-        def _copy(event):
+        def _copy_path(event):
             self.copy_selected_path()
+
+        @kb.add("s")
+        def _copy_file(event):
+            self.copy_selected_file()
+
+        @kb.add("escape", "v")
+        @kb.add("escape", "V")
+        @kb.add("c-v")
+        @kb.add("p")
+        def _paste(event):
+            self.paste_clipboard()
 
         @kb.add("q")
         @kb.add("escape")

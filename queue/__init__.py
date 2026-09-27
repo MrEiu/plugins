@@ -4,8 +4,8 @@ Bridges Pueue to provide autonomous background task queuing, daemon management, 
 All comments and descriptions are in English.
 """
 
-from .plugin import QueuePlugin, AutopilotPlugin
+from .plugin import QueuePlugin
 
 Plugin = QueuePlugin
 
-__all__ = ["QueuePlugin", "AutopilotPlugin", "Plugin"]
+__all__ = ["QueuePlugin", "Plugin"]

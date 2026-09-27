@@ -14,7 +14,6 @@ The plugin enables developers to enqueue long-running commands (builds, tests, d
 - **Log Streaming & Inspection**: Check past task outputs with `kps queue log <id>` or follow live stdout/stderr streams like `tail -f` with `kps queue follow <id>`.
 - **Task Lifecycle Control**: Pause, resume, restart, and kill tasks or entire groups.
 - **Dynamic Context Autocompletion**: Auto-completes subcommands and live task IDs with command summaries and status indicators.
-- **Backwards Compatibility**: Both `kps queue` and legacy `kps auto` commands are fully supported.
 
 ---
 
@@ -32,7 +31,7 @@ kapsel add queue
 
 ## Usage
 
-### 1. Dashboard Overview (`kps queue` / `kps auto`)
+### 1. Dashboard Overview (`kps queue`)
 
 Run `kps queue` without arguments to view the active queue overview and command guide:
 
