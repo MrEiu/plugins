@@ -1,0 +1,113 @@
+/* Kapsel TUI Stylesheet (styles.tcss) */
+
+Screen {
+    layout: vertical;
+    background: #080c10;
+    color: #e6edf3;
+}
+
+/* Top Header */
+#top-header {
+    dock: top;
+    height: 1;
+    background: #0d1117;
+    color: #7d8590;
+    padding: 0 1;
+}
+
+/* Main Split Container */
+#main-split {
+    layout: horizontal;
+    height: 1fr;
+    width: 100%;
+    background: #080c10;
+}
+
+/* Left File Tree Sidebar */
+#file-tree-container {
+    width: 32;
+    min-width: 22;
+    max-width: 48;
+    height: 100%;
+    background: #0d1117;
+    border-right: round #21262d;
+    padding: 0;
+}
+
+#file-tree-container:focus-within {
+    border-right: round #38bdf8;
+}
+
+#file-tree-header {
+    height: 1;
+    background: #161b22;
+    color: #8b949e;
+    text-style: bold;
+    padding: 0 1;
+}
+
+WorkspaceTree {
+    background: #0d1117;
+    padding: 0 1;
+    scrollbar-gutter: stable;
+    scrollbar-color: #21262d;
+    scrollbar-color-hover: #38bdf8;
+}
+
+WorkspaceTree:focus {
+    background: #0d1117;
+}
+
+/* Right Terminal Workspace */
+#terminal-workspace {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+    background: #080c10;
+}
+
+/* Tab Bar */
+#tab-bar-container {
+    dock: top;
+    height: 1;
+    background: #0d1117;
+    border-bottom: solid #21262d;
+    padding: 0 1;
+}
+
+/* Terminal Screen Widget */
+TerminalWidget {
+    width: 100%;
+    height: 1fr;
+    background: #080c10;
+    color: #e6edf3;
+    padding: 0 1;
+}
+
+TerminalWidget:focus {
+    border: none;
+}
+
+/* Bottom Status Bar */
+#bottom-status-bar {
+    dock: bottom;
+    height: 1;
+    background: #0d1117;
+    color: #7d8590;
+    padding: 0 1;
+}
+
+/* Leader Key Modal / Overlay Indicator */
+#leader-indicator {
+    dock: bottom;
+    height: 1;
+    background: #a855f7;
+    color: #ffffff;
+    text-style: bold;
+    padding: 0 1;
+    display: none;
+}
+
+#leader-indicator.visible {
+    display: block;
+}
