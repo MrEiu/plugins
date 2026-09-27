@@ -98,9 +98,9 @@ class TerminalWidget(Widget):
         self.rows: int = 24
 
         # Pyte VT100 Screen and ByteStream
-        self.screen = pyte.Screen(self.cols, self.rows)
-        self.screen.set_mode(pyte.modes.LNM)
-        self.stream = pyte.ByteStream(self.screen)
+        self.vt_screen = pyte.Screen(self.cols, self.rows)
+        self.vt_screen.set_mode(pyte.modes.LNM)
+        self.vt_stream = pyte.ByteStream(self.vt_screen)
 
         # Process & Thread Handles
         self._pty_proc: Optional[Any] = None
@@ -122,7 +122,7 @@ class TerminalWidget(Widget):
         self.cols = max(20, self.size.width or 80)
         self.rows = max(5, self.size.height or 24)
 
-        self.screen.resize(self.rows, self.cols)
+        self.vt_screen.resize(self.rows, self.cols)
         self._running = True
 
         try:
@@ -160,7 +160,7 @@ class TerminalWidget(Widget):
             self._reader_thread.start()
 
         except Exception as e:
-            self.screen.display[0] = f"Failed to spawn terminal shell: {e}"
+            self.vt_screen.display[0] = f"Failed to spawn terminal shell: {e}"
 
     def _read_loop(self) -> None:
         """Continuously reads PTY stdout bytes and feeds them to pyte."""
@@ -179,7 +179,7 @@ class TerminalWidget(Widget):
                     data = self._pty_proc.stdout.read(1024)
 
                 if data:
-                    self.stream.feed(data)
+                    self.vt_stream.feed(data)
                     self.app.call_from_thread(self.refresh)
                 else:
                     time.sleep(0.015)
@@ -212,7 +212,7 @@ class TerminalWidget(Widget):
         if new_cols != self.cols or new_rows != self.rows:
             self.cols = new_cols
             self.rows = new_rows
-            self.screen.resize(self.rows, self.cols)
+            self.vt_screen.resize(self.rows, self.cols)
 
             try:
                 if sys.platform == "win32" and _HAS_WINPTY and self._pty_proc:
@@ -263,13 +263,13 @@ class TerminalWidget(Widget):
     def render(self) -> Text:
         """Renders the pyte 2D character matrix into Rich Text."""
         result = Text()
-        cursor_x = self.screen.cursor.x
-        cursor_y = self.screen.cursor.y
+        cursor_x = self.vt_screen.cursor.x
+        cursor_y = self.vt_screen.cursor.y
 
         for y in range(self.rows):
             line_text = Text()
             for x in range(self.cols):
-                char = self.screen.buffer[y][x]
+                char = self.vt_screen.buffer[y][x]
                 ch = char.data if char.data else " "
 
                 # Style properties

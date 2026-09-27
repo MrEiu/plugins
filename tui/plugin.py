@@ -28,7 +28,7 @@ class TuiPlugin(KapselPlugin):
     manifest = PluginManifest(
         id="tui",
         name="TUI",
-        version="0.1.0",
+        version="0.1.1",
         description="Full-screen developer workbench and split TUI for Kapsel featuring permanent file tree, native multi-tab PTY terminal, and Textual UI shell.",
         author="MrEiu",
         homepage="https://github.com/MrEiu/plugins",

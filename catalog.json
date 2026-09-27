@@ -26,9 +26,9 @@
     "changelog": "Enhanced 'clean' command with zero-loss archiving: saves summary.log, raw snapshot.json, and per-task console output logs before purging history."
   },
   "tui": {
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Full-screen developer workbench and split TUI for Kapsel featuring permanent file tree, native multi-tab PTY terminal, and Textual UI shell.",
-    "changelog": "Initial release: Web-grade Textual UI shell, permanent workspace file tree, native multi-tab PTY terminal, and universal Tab leader-key matrix."
+    "changelog": "Fixed Textual base Screen property collision (renamed to vt_screen/vt_stream) and streamlined PTY reader loop."
   },
   "fuck": {
     "version": "0.1.0",
