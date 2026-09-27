@@ -30,7 +30,7 @@ _HAS_PTYPROCESS = False
 
 try:
     if sys.platform == "win32":
-        import winpty
+        from winpty import PtyProcess as WinPtyProcess
         _HAS_WINPTY = True
     else:
         import ptyprocess
@@ -97,10 +97,10 @@ class TerminalWidget(Widget):
         self.cols: int = 80
         self.rows: int = 24
 
-        # Pyte VT100 Screen and ByteStream
+        # Pyte VT100 Screen and Stream
         self.vt_screen = pyte.Screen(self.cols, self.rows)
         self.vt_screen.set_mode(pyte.modes.LNM)
-        self.vt_stream = pyte.ByteStream(self.vt_screen)
+        self.vt_stream = pyte.Stream(self.vt_screen)
 
         # Process & Thread Handles
         self._pty_proc: Optional[Any] = None
@@ -111,6 +111,10 @@ class TerminalWidget(Widget):
     def on_mount(self) -> None:
         """Starts the PTY session when the widget is mounted."""
         self._start_pty()
+
+    def on_click(self) -> None:
+        """Focuses terminal upon clicking."""
+        self.focus()
 
     def on_unmount(self) -> None:
         """Terminates the PTY session on unmount."""
@@ -127,19 +131,22 @@ class TerminalWidget(Widget):
 
         try:
             if sys.platform == "win32" and _HAS_WINPTY:
-                self._pty_proc = winpty.PTY(self.cols, self.rows)
-                self._pty_proc.spawn(
-                    shell_bin,
+                self._pty_proc = WinPtyProcess.spawn(
+                    shell_args,
                     cwd=str(self.cwd),
                     env=self.env,
+                    dimensions=(self.rows, self.cols),
                 )
                 self._pid = getattr(self._pty_proc, "pid", None)
+                # Send initial Device Attributes handshake for ConPTY
+                self.write_input("\x1b[?1;0c")
             elif _HAS_PTYPROCESS:
                 self._pty_proc = ptyprocess.PtyProcessUnicode.spawn(
                     shell_args,
                     cwd=str(self.cwd),
                     env=self.env,
                     dimensions=(self.rows, self.cols),
+                    dimensions_as_lines_cols=True,
                 )
                 self._pid = getattr(self._pty_proc, "pid", None)
             else:
@@ -160,33 +167,35 @@ class TerminalWidget(Widget):
             self._reader_thread.start()
 
         except Exception as e:
-            self.vt_screen.display[0] = f"Failed to spawn terminal shell: {e}"
+            pass
 
     def _read_loop(self) -> None:
         """Continuously reads PTY stdout bytes and feeds them to pyte."""
         while self._running and self._pty_proc:
             try:
-                data: Optional[bytes] = None
+                raw: Optional[str] = None
                 if sys.platform == "win32" and _HAS_WINPTY:
-                    raw = self._pty_proc.read(4096, blocking=False)
-                    if raw:
-                        data = raw.encode("utf-8", errors="replace") if isinstance(raw, str) else raw
+                    raw = self._pty_proc.read(4096)
                 elif _HAS_PTYPROCESS:
                     raw = self._pty_proc.read(4096)
-                    if raw:
-                        data = raw.encode("utf-8", errors="replace") if isinstance(raw, str) else raw
                 elif hasattr(self._pty_proc, "stdout") and self._pty_proc.stdout:
-                    data = self._pty_proc.stdout.read(1024)
+                    chunk = self._pty_proc.stdout.read(1024)
+                    if chunk:
+                        raw = chunk.decode("utf-8", errors="replace")
 
-                if data:
-                    self.vt_stream.feed(data)
+                if raw:
+                    # Automatic ConPTY / VT DA query response
+                    if "\x1b[c" in raw:
+                        self.write_input("\x1b[?1;0c")
+
+                    self.vt_stream.feed(raw)
                     self.app.call_from_thread(self.refresh)
                 else:
-                    time.sleep(0.015)
+                    time.sleep(0.01)
             except (EOFError, OSError):
                 break
             except Exception:
-                time.sleep(0.02)
+                time.sleep(0.01)
 
     def write_input(self, text: str) -> None:
         """Sends keystrokes or text string to the PTY process."""
@@ -215,23 +224,24 @@ class TerminalWidget(Widget):
             self.vt_screen.resize(self.rows, self.cols)
 
             try:
-                if sys.platform == "win32" and _HAS_WINPTY and self._pty_proc:
-                    self._pty_proc.set_size(self.cols, self.rows)
-                elif _HAS_PTYPROCESS and self._pty_proc:
+                if self._pty_proc and hasattr(self._pty_proc, "setwinsize"):
                     self._pty_proc.setwinsize(self.rows, self.cols)
             except Exception:
                 pass
 
     def on_key(self, event: Key) -> None:
         """Translates Textual key events into terminal ANSI sequences."""
-        key_name = event.key
+        key_name = event.key.lower()
 
-        # Key mapping dictionary
+        # If Tab key is pressed, let it bubble to App for Tab Leader switching
+        if key_name == "tab":
+            return
+
         KEY_MAP = {
             "enter": "\r",
             "return": "\r",
+            "space": " ",
             "backspace": "\x08" if sys.platform == "win32" else "\x7f",
-            "tab": "\t",
             "escape": "\x1b",
             "up": "\x1b[A",
             "down": "\x1b[B",
@@ -253,8 +263,8 @@ class TerminalWidget(Widget):
             "ctrl+k": "\x0b",
         }
 
-        if key_name.lower() in KEY_MAP:
-            self.write_input(KEY_MAP[key_name.lower()])
+        if key_name in KEY_MAP:
+            self.write_input(KEY_MAP[key_name])
             event.stop()
         elif event.character:
             self.write_input(event.character)

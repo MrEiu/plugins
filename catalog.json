@@ -26,9 +26,9 @@
     "changelog": "Enhanced 'clean' command with zero-loss archiving: saves summary.log, raw snapshot.json, and per-task console output logs before purging history."
   },
   "tui": {
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Full-screen developer workbench and split TUI for Kapsel featuring permanent file tree, native multi-tab PTY terminal, and Textual UI shell.",
-    "changelog": "Fixed Textual base Screen property collision (renamed to vt_screen/vt_stream) and streamlined PTY reader loop."
+    "changelog": "Upgraded PTY engine to WinPtyProcess, added ConPTY handshake automation, pyte Stream integration, and click-to-focus support."
   },
   "fuck": {
     "version": "0.1.0",
