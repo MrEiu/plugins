@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from kapsel.core.plugin.base import KapselPlugin, PluginManifest
 from kapsel.core.plugin.context import PluginContext
@@ -36,9 +37,11 @@ from .look import (
     is_system_redundant,
 )
 from .scheduler import (
+    PendingTask,
     add_pending_task,
     list_pending_tasks,
     remove_pending_task,
+    clear_pending_tasks,
     get_max_running,
     set_max_running,
     get_check_interval,
@@ -48,7 +51,7 @@ from .scheduler import (
     get_config,
     update_config,
     tick,
-    load_state,
+    _task_status_name,
 )
 
 ensure_utf8_io()
@@ -201,7 +204,7 @@ def _ensure_scheduler_supervised(pueue_bin: str) -> None:
 
         tasks = data.get("tasks", {})
         for t in tasks.values():
-            if t.get("group") == "_scheduler" and t.get("status") in ("Running", "Queued"):
+            if t.get("group") == "_scheduler" and _task_status_name(t.get("status")) in ("Running", "Queued"):
                 return
 
         scheduler_script = Path(__file__).parent / "scheduler.py"
@@ -239,6 +242,47 @@ def _format_seconds(sec: float) -> str:
     return f"{hours}h {rem_mins}m"
 
 
+def _task_elapsed(status: Any) -> str:
+    """Returns elapsed time for a running or completed Pueue task."""
+    if not isinstance(status, dict):
+        return "-"
+    kind = _task_status_name(status)
+    if kind not in ("Running", "Done"):
+        return "-"
+    info = status.get(kind)
+    if not isinstance(info, dict):
+        return "-"
+    start = _parse_pueue_iso(info.get("start"))
+    if not start:
+        return "-"
+    end = _parse_pueue_iso(info.get("end")) if kind == "Done" else datetime.datetime.now(start.tzinfo)
+    if not end:
+        return "-"
+    return _format_seconds(max(0.0, (end - start).total_seconds()))
+
+
+def _task_status_display(status: Any) -> str:
+    """Formats a Pueue task status for the queue tables."""
+    kind = _task_status_name(status)
+    if kind == "Running":
+        return "[bold #10b981]🟢 Running[/]"
+    if kind == "Queued":
+        return "[bold #f59e0b]🟡 Queued[/]"
+    if kind == "Paused":
+        return "[bold #eab308]⏸️  Paused[/]"
+    if kind == "Done":
+        info = status.get("Done", {}) if isinstance(status, dict) else {}
+        result = info.get("result") if isinstance(info, dict) else None
+        if result == "Success":
+            return "[bold #38bdf8]✔  Done[/]"
+        if result == "Killed":
+            return "[bold #f43f5e]✖  Killed[/]"
+        if isinstance(result, dict) and "Failed" in result:
+            return f"[bold #f43f5e]❌ Failed ({result['Failed']})[/]"
+        return f"[bold #f43f5e]❌ Failed ({result})[/]"
+    return f"[dim]{kind or 'Unknown'}[/]"
+
+
 class QueuePlugin(KapselPlugin):
     """
     Queue plugin integrating Pueue for background execution, hardware resource redundancy probing,
@@ -256,7 +300,7 @@ class QueuePlugin(KapselPlugin):
         return PluginManifest(
             id="queue",
             name="Queue",
-            version="0.1.7",
+            version="0.2.2",
             description="Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
             author="MrEiu",
             homepage="https://github.com/MrEiu/plugins",
@@ -271,14 +315,14 @@ class QueuePlugin(KapselPlugin):
             handler=self.handle_queue_command,
             help_text="Autonomous task queue & resource-aware governor with multi-GPU auto-dispatch (powered by Pueue)",
             subcommands={
-                "add": "Enqueue task with resource checking & {gpu} matching: kps queue add [condition] [command]",
+                "add": "Enqueue task with resource checking, optional --delay 30m, and {gpu} matching",
                 "look": "Inspect hardware resource redundancy (CPU, RAM, all GPUs VRAM & utilization)",
-                "status": "Display active running tasks, allocated GPUs, and pending queue",
+                "status": "Display task counts and runtimes, or inspect one task by ID",
                 "config": "View or adjust thresholds: kps queue config [--min-ram 1.0GB] [--min-vram 20%] [--limit 4]",
                 "limit": "View or adjust maximum concurrent running tasks (default 4)",
                 "interval": "View or adjust periodic scheduler check interval (default 5s)",
                 "pending": "View and manage pending tasks waiting for resources",
-                "log": "Display stdout/stderr output log for a specific task",
+                "log": "Display the last 60 log lines by default: kps queue log <id> [lines]",
                 "follow": "Stream real-time log output for a running task (tail -f style)",
                 "pause": "Pause running tasks or entire task groups",
                 "start": "Resume execution of paused tasks or groups",
@@ -307,6 +351,24 @@ class QueuePlugin(KapselPlugin):
         con = console or Console(legacy_windows=False)
         self.pueue_bin, self.pueued_bin = _resolve_pueue_executables()
 
+        sub = args[0].lower() if args else ""
+        sub_args = args[1:]
+        if sub in ("kill", "stop") and sub_args and re.fullmatch(r"P-[0-9a-fA-F]+", sub_args[0]):
+            if len(sub_args) != 1:
+                con.print("[bold #f43f5e]Usage:[/] kps queue kill <pending-id>")
+                return 1
+            return self._remove_pending(sub_args[0], con)
+        if sub in ("pending", "staged") and sub_args and sub_args[0].lower() in ("rm", "remove", "del", "delete"):
+            if len(sub_args) != 2:
+                con.print("[bold #f43f5e]Usage:[/] kps queue pending rm <pending-id>")
+                return 1
+            return self._remove_pending(sub_args[1], con)
+        if sub in ("pause", "start", "resume", "restart", "retry", "log", "logs", "follow", "tail") and sub_args and re.fullmatch(r"P-[0-9a-fA-F]+", sub_args[0]):
+            con.print("[bold #f43f5e]Pending tasks have no Pueue task ID yet.[/] Use 'kps queue pending rm <pending-id>' to cancel.")
+            return 1
+        if sub in ("status", "st") and sub_args and sub_args[0].startswith("P-"):
+            return self._handle_status(sub_args, con)
+
         if not self.pueue_bin:
             con.print("\n[bold #f43f5e]Error:[/] [white]Pueue (pueue / pueued) is not installed on this system.[/]")
             con.print("[dim]Install automatically using:[/] [bold #00f0ff]kapsel add queue[/]\n")
@@ -315,9 +377,6 @@ class QueuePlugin(KapselPlugin):
         # 1. Bare 'kps queue' or help flag -> Render interactive dashboard
         if not args or args[0] in ("-h", "--help", "help"):
             return self._render_dashboard(con)
-
-        sub = args[0].lower()
-        sub_args = args[1:]
 
         # 2. Daemon Management: 'kps queue daemon [status|start|stop|restart]'
         if sub == "daemon":
@@ -328,6 +387,9 @@ class QueuePlugin(KapselPlugin):
             con.print("[bold #f43f5e]Error:[/] [white]Failed to connect or start Pueue daemon (pueued).[/]")
             con.print("[dim]Try starting it manually with:[/] [bold #00f0ff]kps queue daemon start[/]\n")
             return 1
+
+        if sub == "reset":
+            return self._handle_reset(sub_args, con)
 
         # Ensure background scheduler is supervised by Pueue
         _ensure_scheduler_supervised(self.pueue_bin)
@@ -355,7 +417,7 @@ class QueuePlugin(KapselPlugin):
         elif sub in ("add", "run", "enqueue"):
             return self._handle_add(sub_args, con)
         elif sub in ("log", "logs"):
-            return self._run_passthrough(["log"] + sub_args, con)
+            return self._handle_log(sub_args, con)
         elif sub in ("follow", "tail"):
             return self._run_passthrough(["follow"] + sub_args, con)
         elif sub == "pause":
@@ -368,8 +430,6 @@ class QueuePlugin(KapselPlugin):
             return self._run_passthrough(["kill"] + sub_args, con)
         elif sub in ("clean", "clear"):
             return self._handle_clean(sub_args, con)
-        elif sub == "reset":
-            return self._run_passthrough(["reset"] + sub_args, con)
         elif sub in ("parallel",):
             return self._run_passthrough(["parallel"] + sub_args, con)
         elif sub == "group":
@@ -381,6 +441,20 @@ class QueuePlugin(KapselPlugin):
             return self._handle_add(args, con)
 
     handle_auto_command = handle_queue_command
+
+    def _remove_pending(self, task_id: str, con: Console) -> int:
+        if remove_pending_task(task_id):
+            con.print(f"[bold #10b981]✔ Removed pending task:[/] {task_id}")
+            return 0
+        con.print(f"[bold #f43f5e]Pending task not found:[/] {task_id}")
+        return 1
+
+    def _handle_reset(self, args: List[str], con: Console) -> int:
+        result = self._run_passthrough(["reset"] + args, con)
+        if result == 0:
+            count = clear_pending_tasks()
+            con.print(f"[dim]Cleared {count} pending task(s).[/]")
+        return result
 
     def _render_dashboard(self, con: Console) -> int:
         """Renders an informative status overview, hardware redundancy snapshot, and command guide."""
@@ -397,13 +471,14 @@ class QueuePlugin(KapselPlugin):
         con.print("  [bold #a855f7]kps queue look[/]                     Inspect hardware redundancy (CPU, RAM, GPUs)")
         con.print("  [bold #a855f7]kps queue config[/]                   View or adjust resource thresholds & limits")
         con.print("  [bold #a855f7]kps queue add [cmd][/]                 Enqueue task (default condition: look)")
+        con.print("  [bold #a855f7]kps queue add --delay 30m [cmd][/]     Enqueue task to start after at least 30 minutes")
         con.print("  [bold #a855f7]kps queue add [cond] [cmd][/]          Enqueue task with extra condition")
         con.print("  [bold #a855f7]kps queue add ... --gpu {gpu}[/]       Auto-match and allocate idle GPU (0, 1...)")
-        con.print("  [bold #a855f7]kps queue status[/]                   View active execution & pending queue")
+        con.print("  [bold #a855f7]kps queue status [id][/]              View queue summary or one task's details")
         con.print("  [bold #a855f7]kps queue limit [N][/]                 View or set max concurrent running tasks (default 4)")
         con.print("  [bold #a855f7]kps queue interval [N]s[/]             View or set scheduler polling interval")
         con.print("  [bold #a855f7]kps queue follow [id][/]              Stream live real-time output (tail -f)")
-        con.print("  [bold #a855f7]kps queue log [id][/]                 Display output logs for a task")
+        con.print("  [bold #a855f7]kps queue log [id] [lines][/]         Display the last 60 log lines by default")
         con.print("  [bold #a855f7]kps queue pause [id][/]               Pause active execution")
         con.print("  [bold #a855f7]kps queue start [id][/]               Resume paused task")
         con.print("  [bold #a855f7]kps queue kill [id][/]                Terminate a running task\n")
@@ -543,7 +618,11 @@ class QueuePlugin(KapselPlugin):
                 return 1
 
         if updates:
-            new_cfg = update_config(updates)
+            try:
+                update_config(updates)
+            except ValueError as exc:
+                con.print(f"[bold #f43f5e]Invalid configuration:[/] {exc}")
+                return 1
             con.print("[bold #10b981]✔ Scheduler configuration updated successfully:[/]")
             for k, v in updates.items():
                 con.print(f"  [cyan]{k}:[/] [bold white]{v}[/]")
@@ -597,14 +676,9 @@ class QueuePlugin(KapselPlugin):
 
     def _handle_pending(self, args: List[str], con: Console) -> int:
         """Lists or removes tasks in the pending staging queue."""
-        if args and args[0].lower() in ("rm", "remove", "del", "delete") and len(args) > 1:
-            target_id = args[1]
-            ok = remove_pending_task(target_id)
-            if ok:
-                con.print(f"[bold #10b981]✔ Removed pending task:[/] {target_id}")
-            else:
-                con.print(f"[bold #f43f5e]Pending task not found:[/] {target_id}")
-            return 0
+        if args:
+            con.print("[bold #f43f5e]Usage:[/] kps queue pending [rm <pending-id>]")
+            return 1
 
         pending_tasks = list_pending_tasks()
         if not pending_tasks:
@@ -619,6 +693,7 @@ class QueuePlugin(KapselPlugin):
         )
         table.add_column("Pending ID", justify="right", style="bold #a855f7")
         table.add_column("Command Template", justify="left", style="white")
+        table.add_column("Earliest Start", justify="left", style="dim")
         table.add_column("Extra Condition", justify="left", style="dim")
         table.add_column("Requires GPU", justify="center")
 
@@ -626,7 +701,8 @@ class QueuePlugin(KapselPlugin):
             has_gpu = bool(re.search(r"\{gpu\}", pt.command_template, re.IGNORECASE))
             gpu_badge = "[bold #00f0ff]⚡ {gpu}[/]" if has_gpu else "[dim]CPU[/]"
             cond_display = pt.condition or "[dim](look default)[/]"
-            table.add_row(pt.id, pt.command_template, cond_display, gpu_badge)
+            start_display = datetime.datetime.fromtimestamp(pt.not_before).strftime("%Y-%m-%d %H:%M:%S") if pt.not_before else "Now"
+            table.add_row(pt.id, pt.command_template, start_display, cond_display, gpu_badge)
 
         con.print()
         con.print(table)
@@ -639,39 +715,90 @@ class QueuePlugin(KapselPlugin):
         Supports:
         - kps queue add [condition] [command]
         - kps queue add [command]
-        - Interactive 2-step prompt if no arguments provided
+        - Interactive guided prompt if no arguments provided
         - Standard command fallback
         """
         command: Optional[str] = None
         condition: Optional[str] = None
+        delay_seconds = 0
+
+        if args and args[0] == "--delay":
+            if len(args) < 2:
+                con.print("[bold #f43f5e]Usage:[/] kps queue add --delay <duration> <command> (e.g. 30m)")
+                return 1
+            match = re.fullmatch(r"([1-9]\d*)([smh])", args[1].lower())
+            if not match:
+                con.print("[bold #f43f5e]Invalid delay:[/] Use a positive duration such as 30m, 2h, or 45s.")
+                return 1
+            delay_seconds = int(match.group(1)) * {"s": 1, "m": 60, "h": 3600}[match.group(2)]
+            args = args[2:]
+            if not args:
+                con.print("[bold #f43f5e]Error:[/] Command cannot be empty.")
+                return 1
 
         # 1. Bracket syntax detection (e.g. kps queue add [condition] [command])
         raw_args_line = " ".join(args).strip()
-        brackets = re.findall(r"\[(.*?)\]", raw_args_line)
+        two_brackets = re.fullmatch(r"\[(.*?)\]\s*\[(.*)\]", raw_args_line)
+        one_bracket = re.fullmatch(r"\[(.*)\]", raw_args_line)
 
-        if len(brackets) >= 2:
-            condition = brackets[0].strip()
-            command = brackets[1].strip()
-        elif len(brackets) == 1:
+        if args and args[0] == "--":
+            command = " ".join(args[1:]).strip()
+        elif two_brackets:
+            condition = two_brackets.group(1).strip()
+            command = two_brackets.group(2).strip()
+        elif one_bracket:
             condition = None
-            command = brackets[0].strip()
+            command = one_bracket.group(1).strip()
         elif not args:
-            # 2. Interactive 2-Step Prompt
-            con.print("\n[bold #00f0ff]⚡ Kapsel Queue · Task Enqueue Wizard[/]")
-            con.print("[dim]Add a background command with resource checking & {gpu} matching (Ctrl+C to cancel)[/]\n")
+            # 2. Interactive task setup
+            con.print("\n[bold #00f0ff]⚡ Add Queue Task[/]")
+            con.print("[dim]Ctrl+C to cancel[/]\n")
             try:
                 from prompt_toolkit import prompt
 
-                # Step 1: Command
-                command_in = prompt("Command to execute: ").strip()
-                if not command_in:
+                command = prompt("Command: ").strip()
+                if not command:
                     con.print("[dim]Cancelled.[/]")
                     return 0
-                command = command_in
 
-                # Step 2: Extra condition
-                cond_in = prompt("Extra condition (Optional, press Enter for default 'look' check): ").strip()
-                condition = cond_in if cond_in else None
+                con.print("\n[bold]When to start?[/]")
+                con.print("  [cyan]1[/] Now  [cyan]2[/] In 30 minutes  [cyan]3[/] In 1 hour  [cyan]4[/] Custom")
+                delay_display = "Now"
+                while True:
+                    choice = prompt("Choose [1]: ").strip() or "1"
+                    if choice in ("1", "2", "3"):
+                        delay_seconds = {"1": 0, "2": 1800, "3": 3600}[choice]
+                        delay_display = {"1": "Now", "2": "In 30 minutes", "3": "In 1 hour"}[choice]
+                        break
+                    if choice == "4":
+                        duration = prompt("Delay (e.g. 45s, 30m, 2h): ").strip().lower()
+                        match = re.fullmatch(r"([1-9]\d*)([smh])", duration)
+                        if match:
+                            delay_seconds = int(match.group(1)) * {"s": 1, "m": 60, "h": 3600}[match.group(2)]
+                            delay_display = f"In {duration}"
+                            break
+                    con.print("[yellow]Choose 1–4, or enter a positive custom delay.[/]")
+
+                condition = prompt("Extra condition [none]: ").strip() or None
+
+                summary = Table.grid(padding=(0, 1))
+                summary.add_column(style="dim", no_wrap=True)
+                summary.add_column()
+                summary.add_row("Command", Text(command))
+                summary.add_row("Start", delay_display)
+                summary.add_row("Condition", Text(condition) if condition else "Default resource check")
+                con.print(Panel(summary, title="Review task", border_style="#0891b2"))
+                while True:
+                    answer = prompt("Add this task? [Y/n]: ").strip().lower()
+                    if answer in ("", "y", "yes"):
+                        break
+                    if answer in ("n", "no"):
+                        con.print("[dim]Cancelled.[/]")
+                        return 0
+                    con.print("[yellow]Enter y or n.[/]")
+            except (KeyboardInterrupt, EOFError):
+                con.print("\n[dim]Cancelled.[/]")
+                return 0
             except Exception:
                 con.print("[bold #f43f5e]Interactive prompt interrupted.[/]")
                 return 1
@@ -684,7 +811,8 @@ class QueuePlugin(KapselPlugin):
                     cmd_parts = args[:idx] + args[idx + 2 :]
                     command = " ".join(cmd_parts).strip()
                 else:
-                    command = " ".join(args).strip()
+                    con.print("[bold #f43f5e]Missing condition for option:[/] --if")
+                    return 1
             else:
                 command = " ".join(args).strip()
 
@@ -693,7 +821,7 @@ class QueuePlugin(KapselPlugin):
             return 1
 
         # Enqueue into smart pending queue
-        task = add_pending_task(command_template=command, condition=condition)
+        task = add_pending_task(command_template=command, condition=condition, delay_seconds=delay_seconds)
 
         # Trigger scheduler tick immediately
         dispatched = tick(self.pueue_bin)
@@ -711,28 +839,66 @@ class QueuePlugin(KapselPlugin):
             reason = "Waiting for idle GPU" if has_gpu else "Waiting for resource redundancy / condition"
             con.print(f"[bold #f59e0b]⏳ Enqueued task [{task.id}] in Pending Staging Queue[/]")
             con.print(f"[dim]Command:[/] [white]{command}[/]")
+            if task.not_before:
+                start_display = datetime.datetime.fromtimestamp(task.not_before).strftime("%Y-%m-%d %H:%M:%S")
+                con.print(f"[dim]Earliest start:[/] [cyan]{start_display}[/]")
             if condition:
                 con.print(f"[dim]Condition:[/] [cyan]{condition}[/] + look")
             else:
                 con.print("[dim]Condition:[/] look (CPU < 85%, RAM > 1.5GB, Idle GPU)")
+            if task.not_before:
+                reason = "Waiting for scheduled start time"
             con.print(f"[dim]Status:[/] {reason}. Pueue scheduler will dispatch it automatically.\n")
 
         return 0
 
     def _handle_status(self, args: List[str], con: Console) -> int:
-        """Displays full task status: resource overview, running tasks, and pending queue."""
+        """Displays the queue overview or details for one task."""
         if "--json" in args or "-j" in args:
             return self._run_passthrough(["status"] + args, con)
+
+        if len(args) > 1:
+            con.print("[bold #f43f5e]Usage:[/] kps queue status [task-id]")
+            return 1
+        if args and args[0].startswith("P-"):
+            pending = next((pt for pt in list_pending_tasks() if pt.id == args[0]), None)
+            if pending is None:
+                con.print(f"[bold #f43f5e]Pending task not found:[/] {args[0]}")
+                return 1
+            return self._render_pending_detail(pending, con)
+        if args and not args[0].isdigit():
+            con.print("[bold #f43f5e]Task ID must be a Pueue number or pending P-ID.[/]")
+            return 1
 
         try:
             res = subprocess.run([self.pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=1.5)
             if res.returncode != 0 or not res.stdout.strip():
-                return self._run_passthrough(["status"], con)
+                if args:
+                    con.print(f"[bold #f43f5e]Unable to read task status:[/] {res.stderr.strip() or 'Pueue returned no status data.'}")
+                    return 1
+                return self._run_passthrough(["status"] + args, con)
 
             data = json.loads(res.stdout)
             tasks: Dict[str, Any] = data.get("tasks", {})
-            sched_state = load_state()
-            active_allocs = sched_state.get("active_allocations", {})
+            if args:
+                task = tasks.get(args[0])
+                if not task or task.get("group") == "_scheduler":
+                    con.print(f"[bold #f43f5e]Task not found:[/] {args[0]}")
+                    return 1
+                return self._render_pueue_detail(args[0], task, con)
+
+            active_tasks = {k: v for k, v in tasks.items() if v.get("group") != "_scheduler"}
+            pending_tasks = list_pending_tasks()
+            counts = {"Running": 0, "Queued": 0, "Paused": 0, "Done": 0, "Failed": 0}
+            for task in active_tasks.values():
+                status = task.get("status", {})
+                kind = _task_status_name(status)
+                if kind == "Done":
+                    info = status.get("Done", {}) if isinstance(status, dict) else {}
+                    result = info.get("result") if isinstance(info, dict) else None
+                    counts["Done" if result == "Success" else "Failed"] += 1
+                elif kind in counts:
+                    counts[kind] += 1
 
             # 1. Hardware Resource Summary bar
             cpu = probe_cpu()
@@ -745,58 +911,44 @@ class QueuePlugin(KapselPlugin):
                 f"GPUs: [bold]{gpu_status_str}[/] │ "
                 f"Max Running: [bold]{get_max_running()}[/]"
             )
+            con.print(
+                f"[dim]Tasks:[/] Running [bold]{counts['Running']}[/] │ "
+                f"Queued [bold]{counts['Queued']}[/] │ "
+                f"Paused [bold]{counts['Paused']}[/] │ "
+                f"Done [bold]{counts['Done']}[/] │ "
+                f"Failed [bold]{counts['Failed']}[/] │ "
+                f"Pending [bold]{len(pending_tasks)}[/]"
+            )
 
-            # 2. Pueue Active Tasks Table
-            active_tasks = {k: v for k, v in tasks.items() if v.get("group") != "_scheduler"}
-
+            # 2. Pueue Tasks Table
             if active_tasks:
                 table = Table(
-                    title="[bold #00f0ff]🚀 Active Pueue Execution Queue[/]",
+                    title="[bold #00f0ff]🚀 Pueue Tasks[/]",
                     border_style="#0891b2",
                     header_style="bold #38bdf8",
                     expand=False,
                 )
                 table.add_column("ID", justify="right", style="bold #a855f7")
                 table.add_column("Status", justify="left")
-                table.add_column("GPU", justify="center")
+                table.add_column("Elapsed", justify="right")
                 table.add_column("Command", justify="left", style="white")
                 table.add_column("Group", justify="center", style="dim")
 
                 for tid, t in sorted(active_tasks.items(), key=lambda item: int(item[0])):
                     st_obj = t.get("status", {})
-                    if "Running" in st_obj:
-                        status_text = "[bold #10b981]🟢 Running[/]"
-                    elif "Queued" in st_obj:
-                        status_text = "[bold #f59e0b]🟡 Queued[/]"
-                    elif "Paused" in st_obj:
-                        status_text = "[bold #eab308]⏸️  Paused[/]"
-                    elif "Done" in st_obj:
-                        res_val = st_obj["Done"].get("result")
-                        if res_val == "Success":
-                            status_text = "[bold #38bdf8]✔  Done[/]"
-                        else:
-                            status_text = f"[bold #f43f5e]❌ Failed ({res_val})[/]"
-                    else:
-                        status_text = f"[dim]{list(st_obj.keys())[0] if st_obj else 'Unknown'}[/]"
-
-                    # Check if this task was allocated a specific GPU
-                    gpu_idx = active_allocs.get(str(tid))
-                    gpu_badge = f"[bold #00f0ff]GPU {gpu_idx}[/]" if gpu_idx is not None else "[dim]-[/]"
-
                     cmd_text = t.get("command", "")
                     if len(cmd_text) > 55:
                         cmd_text = cmd_text[:52] + "..."
 
                     grp = t.get("group", "default")
-                    table.add_row(str(tid), status_text, gpu_badge, cmd_text, grp)
+                    table.add_row(str(tid), _task_status_display(st_obj), _task_elapsed(st_obj), cmd_text, grp)
 
                 con.print()
                 con.print(table)
             else:
-                con.print("\n[dim]No active tasks executing in Pueue queue.[/]")
+                con.print("\n[dim]No tasks in Pueue queue.[/]")
 
             # 3. Pending Staging Queue Table
-            pending_tasks = list_pending_tasks()
             if pending_tasks:
                 p_table = Table(
                     title="[bold #f59e0b]⏳ Pending Tasks Waiting for Hardware Resources / Idle GPU[/]",
@@ -806,22 +958,79 @@ class QueuePlugin(KapselPlugin):
                 )
                 p_table.add_column("Staging ID", justify="right", style="bold #a855f7")
                 p_table.add_column("Command Template", justify="left", style="white")
+                p_table.add_column("Earliest Start", justify="left", style="dim")
                 p_table.add_column("Condition", justify="left", style="dim")
-                p_table.add_column("Requires GPU", justify="center")
 
                 for pt in pending_tasks:
-                    has_gpu = bool(re.search(r"\{gpu\}", pt.command_template, re.IGNORECASE))
-                    gpu_badge = "[bold #00f0ff]⚡ {gpu}[/]" if has_gpu else "[dim]CPU[/]"
                     cond_str = pt.condition or "[dim](look)[/]"
-                    p_table.add_row(pt.id, pt.command_template, cond_str, gpu_badge)
+                    start_display = datetime.datetime.fromtimestamp(pt.not_before).strftime("%Y-%m-%d %H:%M:%S") if pt.not_before else "Now"
+                    p_table.add_row(pt.id, pt.command_template, start_display, cond_str)
 
                 con.print()
                 con.print(p_table)
 
             con.print("\n[dim]Commands: 'kps queue look' (probe) │ 'kps queue follow <id>' │ 'kps queue log <id>'[/]\n")
             return 0
-        except Exception:
+        except Exception as exc:
+            if args:
+                con.print(f"[bold #f43f5e]Unable to read task status:[/] {exc}")
+                return 1
             return self._run_passthrough(["status"] + args, con)
+
+    def _render_pueue_detail(self, task_id: str, task: Dict[str, Any], con: Console) -> int:
+        """Renders one Pueue task with its full command and timestamps."""
+        status = task.get("status", {})
+        kind = _task_status_name(status)
+        info = status.get(kind, {}) if isinstance(status, dict) else {}
+        info = info if isinstance(info, dict) else {}
+
+        table = Table(title=f"[bold #00f0ff]Task #{task_id}[/]", border_style="#0891b2")
+        table.add_column("ID", justify="right", style="bold #a855f7")
+        table.add_column("Status")
+        table.add_column("Elapsed", justify="right")
+        table.add_column("Command", style="white")
+        table.add_column("Group", style="dim")
+        table.add_row(task_id, _task_status_display(status), _task_elapsed(status), task.get("command", ""), task.get("group", "default"))
+        con.print(table)
+
+        def display_time(value: Any) -> str:
+            parsed = _parse_pueue_iso(value)
+            return parsed.strftime("%Y-%m-%d %H:%M:%S") if parsed else "-"
+
+        details = Table.grid(padding=(0, 2))
+        details.add_column(style="dim", no_wrap=True)
+        details.add_column(style="white")
+        details.add_row("Created", display_time(task.get("created_at")))
+        details.add_row("Started", display_time(info.get("start")))
+        details.add_row("Finished", display_time(info.get("end")))
+        details.add_row("Working dir", str(task.get("path") or "-"))
+        details.add_row("Label", str(task.get("label") or "-"))
+        if kind == "Done":
+            details.add_row("Result", str(info.get("result", "-")))
+        con.print(details)
+        return 0
+
+    def _render_pending_detail(self, task: PendingTask, con: Console) -> int:
+        """Renders one locally staged task before Pueue dispatch."""
+        table = Table(title=f"[bold #f59e0b]Pending Task {task.id}[/]", border_style="#f59e0b")
+        table.add_column("ID", style="bold #a855f7")
+        table.add_column("Status")
+        table.add_column("Waited", justify="right")
+        table.add_column("Command", style="white")
+        waited = _format_seconds(max(0.0, time.time() - task.created_at)) if task.created_at else "-"
+        table.add_row(task.id, "[bold #f59e0b]⏳ Pending[/]", waited, task.command_template)
+        con.print(table)
+
+        details = Table.grid(padding=(0, 2))
+        details.add_column(style="dim", no_wrap=True)
+        details.add_column(style="white")
+        created = datetime.datetime.fromtimestamp(task.created_at).strftime("%Y-%m-%d %H:%M:%S") if task.created_at else "-"
+        earliest = datetime.datetime.fromtimestamp(task.not_before).strftime("%Y-%m-%d %H:%M:%S") if task.not_before else "Now"
+        details.add_row("Created", created)
+        details.add_row("Earliest start", earliest)
+        details.add_row("Condition", task.condition or "Default resource check")
+        con.print(details)
+        return 0
 
     def _handle_daemon_subcommand(self, args: List[str], con: Console) -> int:
         """Handles daemon management subcommands."""
@@ -1094,6 +1303,20 @@ class QueuePlugin(KapselPlugin):
             con.print(f"[bold #f43f5e]Error cleaning queue:[/] {err_msg}\n")
             return clean_res.returncode
 
+    def _handle_log(self, args: List[str], con: Console) -> int:
+        """Displays a task log with a default or explicit tail length."""
+        if len(args) == 2 and args[0].isdigit() and not args[1].startswith("-"):
+            if not args[1].isdigit() or int(args[1]) < 1:
+                con.print("[bold #f43f5e]Invalid line count:[/] Use a positive integer, e.g. kps queue log 12 100")
+                return 1
+            return self._run_passthrough(["log", "--lines", args[1], args[0]], con)
+
+        has_explicit_limit = any(
+            arg in ("--lines", "-l", "--full", "-f") or arg.startswith("--lines=")
+            for arg in args
+        )
+        return self._run_passthrough(["log"] + ([] if has_explicit_limit else ["--lines", "60"]) + args, con)
+
     def _run_passthrough(self, args: List[str], con: Console) -> int:
         """Executes pueue command with full terminal interactivity and streaming."""
         try:
@@ -1106,7 +1329,7 @@ class QueuePlugin(KapselPlugin):
     def provide_completions(self, text_before_cursor: str) -> List[Dict[str, Any]]:
         """
         Dynamically generates completions for 'kps queue'.
-        Extracts subcommands and active task IDs from Pueue JSON.
+        Provides task IDs and daemon actions; registered subcommands are completed by Kapsel.
         """
         command_line = text_before_cursor
         ends_with_space = command_line.endswith(" ")
@@ -1123,47 +1346,15 @@ class QueuePlugin(KapselPlugin):
         else:
             return []
 
-        # Case 1: Core Subcommands completion
-        subcommands = [
-            ("add", "Enqueue task with resource checking & {gpu} matching"),
-            ("look", "Inspect hardware resource redundancy (CPU, RAM, GPUs)"),
-            ("status", "Display full task queue status and pending tasks"),
-            ("limit", "View or adjust maximum concurrent running tasks"),
-            ("interval", "View or adjust periodic scheduler check interval"),
-            ("pending", "View and manage tasks waiting in pending queue"),
-            ("log", "Display output log for a specific task"),
-            ("follow", "Stream real-time log output for a running task"),
-            ("pause", "Pause running tasks or entire groups"),
-            ("start", "Resume execution of paused tasks"),
-            ("restart", "Restart completed or failed task(s)"),
-            ("kill", "Terminate running task(s) or whole groups"),
-            ("clean", "Remove finished/successful tasks from history"),
-            ("reset", "Kill all running tasks and reset entire queue"),
-            ("daemon", "Manage Pueue background service (status, start, stop)"),
-        ]
-
-        if not queue_args or (len(queue_args) == 1 and not ends_with_space):
-            prefix = queue_args[0].lower() if queue_args else ""
-            return [
-                {
-                    "text": name,
-                    "start_position": -len(prefix),
-                    "display": name,
-                    "display_meta": f"🚀 {desc}",
-                }
-                for name, desc in subcommands
-                if name.startswith(prefix)
-            ]
-
-        # Case 2: Dynamic completions for task IDs
+        # Dynamic completions for task IDs
         sub = queue_args[0].lower() if queue_args else ""
-        if sub in ("log", "follow", "kill", "restart", "pause", "start", "tail") and (
+        if sub in ("status", "log", "follow", "kill", "restart", "pause", "start", "tail") and (
             (len(queue_args) == 1 and ends_with_space) or (len(queue_args) == 2 and not ends_with_space)
         ):
             target_prefix = queue_args[1].lower() if len(queue_args) == 2 else ""
             return self._query_task_id_completions(target_prefix)
 
-        # Case 3: Daemon subcommands
+        # Daemon subcommands
         if sub == "daemon" and (
             (len(queue_args) == 1 and ends_with_space) or (len(queue_args) == 2 and not ends_with_space)
         ):

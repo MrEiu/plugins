@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kapsel-plugin-queue"
-version = "0.1.2"
+version = "0.2.2"
 description = "Autonomous background task queue and daemon execution manager for Kapsel powered by Pueue."
 readme = "README.md"
 authors = [{ name = "MrEiu" }]

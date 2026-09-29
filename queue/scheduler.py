@@ -8,6 +8,7 @@ All comments and descriptions are in English.
 
 from dataclasses import asdict, dataclass
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,9 +17,16 @@ import subprocess
 import sys
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
+from uuid import uuid4
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from kapsel.storage.config import get_kapsel_dir
-from .look import find_available_idle_gpus, is_system_redundant, probe_all_gpus
+if __package__:
+    from .look import find_available_idle_gpus, is_system_redundant, probe_all_gpus
+else:
+    from plugins.queue.look import find_available_idle_gpus, is_system_redundant, probe_all_gpus
 
 
 @dataclass
@@ -27,6 +35,7 @@ class PendingTask:
     command_template: str
     condition: Optional[str] = None
     created_at: float = 0.0
+    not_before: Optional[float] = None
     status: str = "pending"
     allocated_gpu: Optional[int] = None
     dispatched_at: Optional[float] = None
@@ -42,6 +51,7 @@ class PendingTask:
             command_template=data.get("command_template", ""),
             condition=data.get("condition"),
             created_at=data.get("created_at", 0.0),
+            not_before=data.get("not_before"),
             status=data.get("status", "pending"),
             allocated_gpu=data.get("allocated_gpu"),
             dispatched_at=data.get("dispatched_at"),
@@ -172,31 +182,61 @@ def update_config(updates: Dict[str, Any]) -> Dict[str, Any]:
     for k, v in updates.items():
         k_clean = k.lower().replace("-", "_")
         if k_clean in ("max_running", "limit"):
-            state["max_running"] = max(1, int(v))
+            value = int(v)
+            if value < 1:
+                raise ValueError("Limit must be at least 1")
+            state["max_running"] = value
         elif k_clean in ("interval", "interval_seconds", "tick"):
-            state["interval_seconds"] = max(1, int(str(v).lower().rstrip("s")))
+            interval = str(v).lower()
+            value = int(interval[:-1] if interval.endswith("s") else interval)
+            if value < 1:
+                raise ValueError("Interval must be at least 1 second")
+            state["interval_seconds"] = value
         elif k_clean in ("min_ram", "min_free_ram", "ram"):
+            _validate_threshold(v, "RAM")
             th["min_free_ram"] = str(v).strip()
         elif k_clean in ("min_vram", "min_free_vram", "vram", "gpu_vram"):
+            _validate_threshold(v, "VRAM")
             th["min_free_vram"] = str(v).strip()
         elif k_clean in ("min_cpu", "min_free_cpu", "cpu"):
+            _validate_threshold(v, "CPU")
             th["min_free_cpu"] = str(v).strip()
+        else:
+            raise ValueError(f"Unknown configuration option: {k}")
 
     save_state(state)
     return get_config()
 
 
-def add_pending_task(command_template: str, condition: Optional[str] = None) -> PendingTask:
+def _validate_threshold(value: Any, resource: str) -> None:
+    raw = str(value).strip().lower()
+    units = r"%?" if resource == "CPU" else r"(?:%|gb|g|mb|m)?"
+    match = re.fullmatch(rf"(\d+(?:\.\d+)?){units}", raw)
+    if not match:
+        raise ValueError(f"Invalid {resource} threshold: {value}")
+    amount = float(match.group(1))
+    if not math.isfinite(amount) or amount <= 0 or (raw.endswith("%") and amount > 100):
+        raise ValueError(f"Invalid {resource} threshold: {value}")
+    if resource == "CPU" and amount > 100:
+        raise ValueError(f"Invalid CPU threshold: {value}")
+
+
+def add_pending_task(
+    command_template: str,
+    condition: Optional[str] = None,
+    delay_seconds: int = 0,
+) -> PendingTask:
     """Enqueues a new command template into the pending queue."""
     state = load_state()
-    task_num = len(state.get("pending", [])) + int(time.time()) % 10000
-    task_id = f"P-{task_num}"
+    task_id = f"P-{uuid4().hex[:12]}"
+    created_at = time.time()
 
     task = PendingTask(
         id=task_id,
         command_template=command_template.strip(),
         condition=condition.strip() if condition and condition.strip() else None,
-        created_at=time.time(),
+        created_at=created_at,
+        not_before=created_at + delay_seconds if delay_seconds else None,
         status="pending",
     )
 
@@ -220,6 +260,14 @@ def remove_pending_task(task_id: str) -> bool:
     return False
 
 
+def clear_pending_tasks() -> int:
+    state = load_state()
+    count = len(state.get("pending", []))
+    state["pending"] = []
+    save_state(state)
+    return count
+
+
 def get_active_allocated_gpus(state: Optional[Dict[str, Any]] = None) -> Set[int]:
     """Returns set of GPU indices currently locked by active Pueue tasks."""
     st = state or load_state()
@@ -227,43 +275,49 @@ def get_active_allocated_gpus(state: Optional[Dict[str, Any]] = None) -> Set[int
     return {int(gpu_idx) for gpu_idx in allocs.values()}
 
 
-def _sync_pueue_status(pueue_bin: str, state: Dict[str, Any]) -> Tuple[int, Set[int]]:
+def _task_status_name(status: Any) -> str:
+    if isinstance(status, dict):
+        return next(iter(status), "")
+    return status if isinstance(status, str) else ""
+
+
+def _sync_pueue_status(pueue_bin: str, state: Dict[str, Any]) -> Tuple[Optional[int], Set[int]]:
     """
     Queries Pueue daemon status via JSON.
     Releases GPU allocations for tasks that have finished (Done, Failed, Killed).
-    Returns (currently_running_task_count, set_of_active_allocated_gpus).
+    Returns (running_or_queued_task_count, set_of_active_allocated_gpus).
     """
     running_count = 0
     allocations = dict(state.get("active_allocations", {}))  # {str(pueue_id): gpu_idx}
 
     try:
         res = subprocess.run([pueue_bin, "status", "--json"], capture_output=True, text=True, timeout=2.0)
-        if res.returncode == 0:
-            pueue_data = json.loads(res.stdout)
-            tasks = pueue_data.get("tasks", {})
+        if res.returncode != 0:
+            return None, {int(v) for v in allocations.values()}
+        pueue_data = json.loads(res.stdout)
+        tasks = pueue_data.get("tasks", {})
+        if not isinstance(tasks, dict):
+            return None, {int(v) for v in allocations.values()}
 
-            active_pueue_ids = set()
-            for tid_str, tinfo in tasks.items():
-                status = tinfo.get("status", "")
-                group = tinfo.get("group", "")
-                # Skip internal scheduler worker task if any
-                if group == "_scheduler":
-                    continue
+        active_pueue_ids = set()
+        for tid_str, tinfo in tasks.items():
+            status = _task_status_name(tinfo.get("status"))
+            group = tinfo.get("group", "")
+            if group == "_scheduler":
+                continue
 
-                if status == "Running":
-                    running_count += 1
-                    active_pueue_ids.add(str(tid_str))
-                elif status in ("Queued", "Paused", "Stashing"):
-                    active_pueue_ids.add(str(tid_str))
+            if status in ("Running", "Queued"):
+                running_count += 1
+            if status in ("Running", "Queued", "Paused", "Stashing"):
+                active_pueue_ids.add(str(tid_str))
 
-            # Prune allocations for finished tasks
-            for pid in list(allocations.keys()):
-                if pid not in active_pueue_ids:
-                    allocations.pop(pid, None)
+        for pid in list(allocations.keys()):
+            if pid not in active_pueue_ids:
+                allocations.pop(pid, None)
 
-            state["active_allocations"] = allocations
+        state["active_allocations"] = allocations
     except Exception:
-        pass
+        return None, {int(v) for v in allocations.values()}
 
     active_gpus = {int(v) for v in allocations.values()}
     return running_count, active_gpus
@@ -327,12 +381,18 @@ def tick(pueue_bin: str) -> List[Tuple[PendingTask, int]]:
 
     # 1. Sync Pueue status & prune finished allocations
     running_count, allocated_gpus = _sync_pueue_status(pueue_bin, state)
+    if running_count is None:
+        return []
 
     dispatched_records: List[Tuple[PendingTask, int]] = []
     remaining_pending: List[Dict[str, Any]] = []
 
     for task_dict in pending_list:
         task = PendingTask.from_dict(task_dict)
+
+        if task.not_before is not None and time.time() < task.not_before:
+            remaining_pending.append(task_dict)
+            continue
 
         # Concurrency limit reached
         if running_count >= max_running:
@@ -431,7 +491,10 @@ def run_scheduler_daemon_loop(pueue_bin: str) -> None:
 
 
 if __name__ == "__main__":
-    from .plugin import _resolve_pueue_executables
+    if __package__:
+        from .plugin import _resolve_pueue_executables
+    else:
+        from plugins.queue.plugin import _resolve_pueue_executables
     pueue_exec, _ = _resolve_pueue_executables()
     if pueue_exec:
         run_scheduler_daemon_loop(pueue_exec)

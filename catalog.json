@@ -21,9 +21,9 @@
     "changelog": "Rewritten with PM2 as core engine: polyglot runtimes, cluster mode, zero-downtime reload, and dynamic autocompletion."
   },
   "queue": {
-    "version": "0.1.7",
+    "version": "0.2.2",
     "description": "Autonomous background task queue and resource-aware governor powered by Pueue with multi-GPU auto-dispatch.",
-    "changelog": "Enhanced 'clean' command with zero-loss archiving: saves summary.log, raw snapshot.json, and per-task console output logs before purging history."
+    "changelog": "Added status task counts, elapsed times, per-task details, and a 60-line default with positional line count for log."
   },
   "tui": {
     "version": "0.1.2",
